@@ -57,26 +57,6 @@ docker compose version
 
 You will now create deploy package to transfer to deployment machine
 
-```
-$HOME/apps/bublik
-├── deps                       # Required dependencies for running bublik (currently only docker)
-│   ├── ...
-│   ├── docker-buildx-plugin_0.27.0-1~ubuntu.24.04~noble_amd64.deb
-│   └── containerd.io_1.7.27-1_amd64.deb
-├── bin/                       # Required executables by bublik
-│   ├── ...
-│   └── task                   # Task executable
-├── config/
-│   └── .env                   # Environment file (symlink to current dir)
-├── versions/
-│   ├── bublik-2.1.0/          # Version-specific repository
-│   ├── bublik-1.8.0/          # Version-specific repository
-│   └── ...
-└── current -> versions/2.1.0/ # Symlink to active version
-    ├── ...
-    └── .env -> config/.env    # Symlink to configuration file
-```
-
 #### Test
 
 ```bash
@@ -119,12 +99,12 @@ ln -s $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
 ls -lha $HOME/apps/bublik/current/.env | grep ".env"
 
 # 4. Setup IDs (needed for correct permissions)
-echo "HOST_UID=$(id -u)" >> $HOME/apps/bublik/current/.env
-echo "HOST_GID=$(id -g)" >> $HOME/apps/bublik/current/.env
+echo "HOST_UID=$(id -u)" >> $HOME/apps/bublik/config/.env
+echo "HOST_GID=$(id -g)" >> $HOME/apps/bublik/config/.env
 
 # 5. Set correct version so it pulls correct image versions
-# Example: `sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=2.1.0/' $HOME/apps/bublik/current/.env`
-sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<version_without_v>/' $HOME/apps/bublik/current/.env
+# Example: `sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=2.1.0/' $HOME/apps/bublik/config/.env`
+sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<version_without_v>/' $HOME/apps/bublik/config/.env
 # Verify correct image tag is set
 cat $HOME/apps/bublik/current/.env | grep "IMAGE_TAG"
 
@@ -149,7 +129,33 @@ docker save -o $HOME/apps/bublik/images/bublik-<version_without_v>.tar \
 1. Edit the `.env` file: `$HOME/apps/bublik/config/.env`
 2. Follow the configuration guide: [Bublik Configuration Documentation](https://ts-factory.github.io/bublik-release/docker/setup#4-configure-environment)
 
+#### What You Have Prepared
+
+At this point, you have successfully created a complete deployment package in `$HOME/apps/bublik/` containing:
+
+```
+$HOME/apps/bublik/
+├── deps/                      # Docker installation packages (.deb files)
+├── bin/                       # Required executables (task, jq, curl, git)
+├── images/                    # Docker images saved as .tar files
+│   └── bublik-<version>.tar
+├── config/
+│   └── .env                   # Your configured environment file
+├── versions/
+│   └── bublik-<version>/      # Complete Bublik repository with all components
+└── current -> versions/bublik-<version>/  # Symlink to active version
+```
+
+**Key components ready for transfer:**
+- ✅ All Docker dependencies and installation packages
+- ✅ Required executables (task, jq, curl, git)
+- ✅ Pre-pulled Docker images (saved as .tar archive)
+- ✅ Complete Bublik application code and configuration
+- ✅ Configured environment file with your settings
+
 #### Transfer To Deployment machine
+
+Now we'll package everything and transfer it to your air-gapped deployment machine.
 
 ```bash
 # 1. Create Archive
@@ -219,14 +225,19 @@ docker image ls
 # 3. Go to currently linked repo version
 cd $HOME/apps/bublik/current
 
-# 4. Adjust UID and GUID in case it's different from prep machine in case they different
-sed -i "s/^HOST_UID=.*/HOST_UID=$(id -u)/" .env
-sed -i "s/^HOST_GID=.*/HOST_GID=$(id -g)/" .env
+# 4. Link configuration
+ln -sfn $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
+# Verify link
+ls -lha $HOME/apps/bublik/current/.env | grep ".env"
 
-# 5. Verify correct image tag is set
+# 5. Adjust UID and GUID in case it's different from prep machine in case they different
+sed -i "s/^HOST_UID=.*/HOST_UID=$(id -u)/" $HOME/apps/bublik/config/.env
+sed -i "s/^HOST_GID=.*/HOST_GID=$(id -g)/" $HOME/apps/bublik/config/.env
+
+# 6. Verify correct image tag is set
 cat $HOME/apps/bublik/current/.env | grep "IMAGE_TAG"
 
-# 6. To start application
+# 7. To start application
 task up
 ```
 
@@ -263,11 +274,11 @@ ln -sfn $HOME/apps/bublik/versions/bublik-<version_without_v> $HOME/apps/bublik/
 ls -lha $HOME/apps/bublik | grep "current"
 
 # 3. Re-link .env configuration
-ln -s $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
+ln -sfn $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
 ls -lha $HOME/apps/bublik/current/.env | grep ".env"
 
 # 4. Set correct `IMAGE_TAG` to new version
-sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<version_without_v>/' $HOME/apps/bublik/current/.env
+sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<version_without_v>/' $HOME/apps/bublik/config/.env
 cat $HOME/apps/bublik/current/.env | grep "IMAGE_TAG"
 
 # 5. Pull new images
@@ -288,11 +299,21 @@ docker save -o $HOME/apps/bublik/images/bublik-<version_without_v>.tar \
 
 #### Step 2: Create Update Package
 
+At this point, you have successfully created a complete update package in `$HOME` containing:
+
+```
+$HOME/apps/bublik/
+├── images/                    # Docker images saved as .tar files
+│   └── bublik-<version>.tar
+└── versions/
+    └── bublik-<version>/      # Complete Bublik repository with all components
+```
+
 ```bash
 # 1. Create update archive with new version repository and images
 tar czf $HOME/bublik-update-<version_without_v>.tar.gz -C $HOME apps/bublik/versions/bublik-<version_without_v> apps/bublik/images/bublik-<version_without_v>.tar
 
-# 2. Transfer update package to deployment machine
+# 2. Transfer to deploy machine
 scp $HOME/bublik-update-<version_without_v>.tar.gz <deploy_machine>:~
 ```
 
@@ -330,13 +351,9 @@ docker image ls
 ln -sfn $HOME/apps/bublik/versions/bublik-<version_without_v> $HOME/apps/bublik/current
 # Verify link
 ls -lha $HOME/apps/bublik | grep "current"
-# Verify working tree is clean
-git status
-# Verify you are on correct version
-git log
 
 # 5. Re-link old configuration
-ln -s $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
+ln -sfn $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
 # Verify link
 ls -lha $HOME/apps/bublik/current/.env | grep ".env"
 
