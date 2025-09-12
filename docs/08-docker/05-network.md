@@ -2,151 +2,206 @@
 title: Network-Restricted Deployment
 ---
 
-<!--toc:start-->
-
-- [1: Prepare Testing Machine](#1-prepare-testing-machine)
-  - [1.1 Install System Dependencies](#11-install-system-dependencies)
-  - [1.2 Install Docker](#12-install-docker)
-  - [1.3 Setup Bublik Repository](#13-setup-bublik-repository)
-- [2: Prepare Target Machine Dependencies](#2-prepare-target-machine-dependencies)
-  - [2.1 Transfer Task Binary](#21-transfer-task-binary)
-  - [2.2 Install Docker Engine](#22-install-docker-engine)
-  - [2.3 Docker Group Setup](#23-docker-group-setup)
-  - [2.4 Verify Target Machine Setup](#24-verify-target-machine-setup)
-- [3: Deploy](#3-deploy)
-  - [3.1 Backup Existing Database (If Applicable)](#31-backup-existing-database-if-applicable)
-  - [3.2 Prepare Application Version](#32-prepare-application-version)
-  - [3.3 Configure Environment](#33-configure-environment)
-  - [3.4 Transfer Docker Images](#34-transfer-docker-images)
-  - [3.5 Start the Application](#35-start-the-application)
-  - [3.6 Restore DB (If Applicable)](#36-restore-db-if-applicable)
-- [Post-Deployment](#post-deployment)
-  - [Access Your Application](#access-your-application)
-- [Update](#update)
-  - [Pre-Update Checklist](#pre-update-checklist)
-  - [Update Process](#update-process)
-  - [Update Path Example](#update-path-example)
-  <!--toc:end-->
-
 This guide walks you through deploying Bublik in an network-restricted environment using two machines:
 
-- **Testing Machine**: Has internet access, used for downloading and preparing components
-- **Target Machine**: Air-gapped Ubuntu 24.04 LTS system where Bublik will be deployed
+- **Preparation Machine**: Has internet access, used for downloading and preparing components
+- **Deploy Machine**: Air-gapped Ubuntu 24.04 LTS system where Bublik will be deployed
 
-Both machines should be Ubuntu 24.04 LTS
+Both machines should be **Ubuntu 24.04 LTS**
 We support `arm64` and `amd64`
 We assume `amd64` in below instructions
 
 ---
 
-## 1: Prepare Testing Machine
+## Preparation Machine
 
-### 1.1 Install System Dependencies
-
-:::danger
-Always review scripts before executing them from the internet
-:::
+### Install Dependencies
 
 ```bash
-# Install Task (task runner)
-sudo sh -c "$(curl -L https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
-```
+sudo apt-get update && sudo apt-get install jq git curl
 
-### 1.2 Install Docker
+# A restart may or may not be required for the command to be recognized depending on your system.
+sudo snap install --classic go
 
-```bash
+# Add GOBIN to path so task works
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.bashrc
+
+# Install task from source
+go install github.com/go-task/task/v3/cmd/task@latest
+
 # Install Docker and Docker Compose
 sudo curl -fsSL https://get.docker.com | sh
 
+sudo usermod -aG docker $USER
 # Apply group changes (allows running docker without sudo)
+newgrp docker
+
+source $HOME/.bashrc
+```
+
+**Verify installation:**
+
+```bash
+curl --version
+jq --version
+go version
+task --version
+git --version
+docker --version
+docker compose version
+```
+
+### 1.3 Prepare Initial Deploy
+
+You will now create deploy package to transfer to deployment machine
+
+```
+$HOME/apps/bublik
+├── deps
+│   ├── docker-buildx-plugin_0.27.0-1~ubuntu.24.04~noble_amd64.deb
+│   └── containerd.io_1.7.27-1_amd64.deb
+├── bin/
+│   └── task                   # Task executable
+├── config/
+│   └── .env                   # Environment file
+├── versions/
+│   ├── bublik-2.1.0/          # Version-specific repository
+│   ├── bublik-1.8.0/          # Version-specific repository
+│   └── ...
+└── current -> versions/2.1.0/ # Symlink to active version
+```
+
+```bash
+mkdir -p $HOME/apps/bublik
+mkdir -p $HOME/apps/bublik/deps
+mkdir -p $HOME/apps/bublik/bin
+mkdir -p $HOME/apps/bublik/images
+mkdir -p $HOME/apps/bublik/versions
+mkdir -p $HOME/apps/bublik/config
+
+# Transfer task
+cp $(which task) $HOME/apps/bublik/bin
+
+# Skip if deployment machine have jq already installed
+cp $(which jq) $HOME/apps/bublik/bin
+# Skip if deployment machine have curl already installed
+cp $(which curl) $HOME/apps/bublik/bin
+# Skip if deployment machine has curl already installed
+cp $(which git) $HOME/apps/bublik/bin
+
+# Download Docker packages
+cd $HOME/apps/bublik/deps && apt download docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && cd -
+```
+
+#### Setup Sources
+
+```bash
+# Version is with TAG e.g v2.1.0
+# Example: `git clone --branch v2.1.0 --recurse-submodules https://github.com/ts-factory/bublik-docker.git $HOME/apps/bublik/versions/bublik-2.1.0`
+git clone --branch <version> --recurse-submodules https://github.com/ts-factory/bublik-docker.git $HOME/apps/bublik/versions/bublik-<version>
+
+# Setup link to current deploy repo
+# Example: `ln -s $HOME/apps/bublik/versions/bublik-2.1.0 $HOME/apps/bublik/current`
+ln -s $HOME/apps/bublik/versions/bublik-<version> $HOME/apps/bublik/current
+
+# Setup .env file
+cp $HOME/apps/bublik/current/.env.example $HOME/apps/bublik/config/.env
+ln -s $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
+# Setup IDs (needed for correct permissions)
+echo "HOST_UID=$(id -u)" >> $HOME/apps/bublik/current/.env
+echo "HOST_GID=$(id -g)" >> $HOME/apps/bublik/current/.env
+
+# Check Symlinks
+ls -lha $HOME/apps/bublik | grep "current"
+ls -lha $HOME/apps/bublik/current/.env | grep ".env"
+
+# Set correct version so it pulls correct image versions
+# Example: `sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=2.1.0/' $HOME/apps/bublik/current/.env`
+sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<version_without_v>/' $HOME/apps/bublik/current/.env
+# Verify correct image tag is set
+cat $HOME/apps/bublik/current/.env | grep "IMAGE_TAG"
+
+cd $HOME/apps/bublik/current && task pull
+
+# Check that images pulled
+docker image ls
+
+# Save images
+docker save -o $HOME/apps/bublik/images/bublik-<version>.tar \
+  ghcr.io/ts-factory/bublik-nginx:<version> \
+  ghcr.io/ts-factory/bublik-log-server:<version> \
+  ghcr.io/ts-factory/bublik-runner:<version> \
+  redis:latest \
+  postgres:latest \
+  rabbitmq:3-management
+```
+
+```bash
+# Create Archive
+tar czf $HOME/bublik-deploy.tar.gz -C $HOME apps
+
+# Transfer everything to deploy machine
+scp $HOME/bublik-deploy.tar.gz <deploy_machine>:~
+```
+
+---
+
+## Deploy Machine
+
+```bash
+tar xzf $HOME/bublik-deploy.tar.gz
+
+echo 'export PATH="$HOME/apps/bublik/bin:$PATH"' >> ~/.bashrc
+
+rm bublik-deploy.tar.gz
+
+source ~/.bashrc
+```
+
+### Install docker
+
+```bash
+sudo dpkg -i $HOME/apps/bublik/deps/*.deb
+sudo usermod -aG docker $USER
 newgrp docker
 ```
 
 **Verify installation:**
 
 ```bash
+curl --version
+jq --version
+task --version
+git --version
 docker --version
 docker compose version
 ```
 
-### 1.3 Setup Bublik Repository
-
 ```bash
-git clone --recurse-submodules https://github.com/ts-factory/bublik-docker.git
+# Load images
+# Example: `docker load -i $HOME/apps/bublik/images/bublik-2.1.0.tar`
+docker load -i $HOME/apps/bublik/images/bublik-<version>.tar
 
-cd bublik-docker
+# Verify correct images loaded
+docker image ls
 
-# Initialize the project
-# Note: You may need to log out and back in after Docker installation
+# Go to currently linked repo version
+cd $HOME/apps/bublik/current
+
+# Adjust UID and GUID in case it's different from prep machine in case they different
+sed -i "s/^HOST_UID=.*/HOST_UID=$(id -u)/" .env
+sed -i "s/^HOST_GID=.*/HOST_GID=$(id -g)/" .env
+# Verify correct image tag is set
+cat $HOME/apps/bublik/current/.env | grep "IMAGE_TAG"
+
+# To setup and check
 task setup
+
+# To start application
+task up
 ```
 
----
-
-## 2: Prepare Target Machine Dependencies
-
-All commands in this section are run from the **testing machine** to prepare the target machine.
-
-### 2.1 Transfer Task Binary
-
-```bash
-curl -sL https://github.com/go-task/task/releases/latest/download/task_linux_amd64.tar.gz -o task.tar.gz
-
-tar -xzf task.tar.gz task
-
-scp task <target_machine>:/tmp/
-
-ssh <target_machine> "sudo -S mv /tmp/task /usr/local/bin/ && sudo chmod +x /usr/local/bin/task"
-
-ssh <target_machine> "task --version"
-
-rm task task.tar.gz
-```
-
-### 2.2 Install Docker Engine
-
-:::danger
-It's recommend to follow [official instructions for installation](https://docs.docker.com/engine/install/ubuntu/) if you can
-:::
-
-```bash
-mkdir -p docker-offline && cd docker-offline
-
-apt download docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-scp *.deb <target_machine>:/tmp/
-
-ssh -t <target_machine> "cd /tmp && sudo dpkg -i *.deb || sudo apt-get install -f -y"
-
-cd .. && rm -rf docker-offline
-```
-
-### 2.3 Docker Group Setup
-
-```bash
-ssh <target_machine>
-
-sudo usermod -aG docker $USER
-
-newgrp docker
-```
-
-Log out and log back in so that your group membership is re-evaluated.
-
-> If you're running Linux in a virtual machine, it may be necessary to restart the virtual machine for changes to take effect.
-
-### 2.4 Verify Target Machine Setup
-
-```bash
-ssh <target_machine>
-
-docker --version
-docker compose version
-```
-
----
-
-## 3: Deploy
+## 3: Update
 
 ### 3.1 Backup Existing Database (If Applicable)
 
@@ -165,25 +220,11 @@ scp backup_*.sql <target_machine>:~/
 **On testing machine:**
 
 ```bash
-# Navigate to repository
-cd ~/bublik-docker
-
-# Checkout desired version (e.g., v1.7.0)
-git checkout <version_tag>
-
-# Transfer repository to target machine (excluding git history and env files)
-rsync -avz --progress --exclude '.git/' --exclude '.env' ~/bublik-docker/ <target_machine>:~/bublik-docker
 ```
 
 **On target machine:**
 
 ```bash
-# Navigate to transferred repository
-cd ~/bublik-docker
-
-# Run setup (you may need to log out and back in for Docker group changes)
-# Required only if it's your first deploy
-task setup
 ```
 
 ### 3.3 Configure Environment
@@ -194,57 +235,6 @@ task setup
 :::warning
 You only need **step 4** from instructions if you are migration to docker from bare deploy
 :::
-
-### 3.4 Transfer Docker Images
-
-**On testing machine:**
-
-```bash
-# Set the correct image tag (remove 'v' prefix, e.g., '1.7.0' for tag 'v1.7.0')
-sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<tag_without_v>/' .env
-
-# Verify the tag is correct
-cat .env | grep IMAGE_TAG
-
-# Pull all required images (if everythin correct no errors should occur)
-task pull
-
-# Verify images are downloaded
-docker image ls
-
-# Save and transfer images to target machine
-# This may take several minutes depending on network speed
-docker save \
-  ghcr.io/ts-factory/bublik-nginx:<tag_without_v> \
-  ghcr.io/ts-factory/bublik-log-server:<tag_without_v> \
-  ghcr.io/ts-factory/bublik-runner:<tag_without_v> \
-  redis:latest \
-  postgres:latest \
-  rabbitmq:3-management \
-| gzip | ssh <target_machine> "gunzip | docker load"
-```
-
-**On target machine:**
-
-```bash
-# Verify images were transferred successfully
-docker image ls
-
-# Set the correct image tag
-sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<tag_without_v>/' .env
-
-# Verify the tag is correct
-cat .env | grep IMAGE_TAG
-```
-
-### 3.5 Start the Application
-
-**On target machine:**
-
-```bash
-# Start all services
-task up
-```
 
 **Startup Information:**
 
@@ -273,7 +263,7 @@ task up
 ### Access Your Application
 
 - Navigate to `http://<target_machine_ip>` in your browser
-- Default ports are defined in your `.env` file
+- Default ports are defined in your `$HOME/apps/bublik/config/.env` file
 
 ---
 
