@@ -2,6 +2,36 @@
 title: Network-Restricted Deployment
 ---
 
+<!--toc:start-->
+
+- [First Deploy](#first-deploy)
+  - [Preparation Machine](#preparation-machine)
+    - [Install Dependencies](#install-dependencies)
+    - [Prepare Initial Deploy](#prepare-initial-deploy)
+    - [Test](#test)
+    - [Setup Preparation Machine](#setup-preparation-machine)
+    - [Configuration](#configuration)
+    - [What You Have Prepared](#what-you-have-prepared)
+    - [Transfer To Deployment machine](#transfer-to-deployment-machine)
+  - [Deploy Machine](#deploy-machine)
+    - [Install docker](#install-docker)
+    - [Configuration](#configuration)
+    - [Finish Initial Deploy](#finish-initial-deploy)
+- [Update](#update)
+  - [Pre-Update Checklist](#pre-update-checklist)
+  - [Preparation Machine](#preparation-machine)
+    - [Step 1: Prepare New Version](#step-1-prepare-new-version)
+    - [Step 2: Create Update Package](#step-2-create-update-package)
+  - [Deployment Machine](#deployment-machine)
+    - [Step 3: Backup Current System (On Deployment Machine)](#step-3-backup-current-system-on-deployment-machine)
+    - [Step 4: Apply Update (On Deployment Machine)](#step-4-apply-update-on-deployment-machine)
+    - [Step 5: Start Updated Application (On Deployment Machine)](#step-5-start-updated-application-on-deployment-machine)
+  - [Update Path Example](#update-path-example)
+- [Post-Deployment](#post-deployment)
+  - [Access Your Application](#access-your-application)
+  - [Database Migration (If Applicable)](#database-migration-if-applicable)
+  <!--toc:end-->
+
 This guide walks you through deploying Bublik in an network-restricted environment using two machines:
 
 - **Preparation Machine**: Has internet access, used for downloading and preparing components
@@ -84,13 +114,16 @@ cd $HOME/apps/bublik/deps && apt download docker-ce docker-ce-cli containerd.io 
 #### Setup Preparation Machine
 
 ```bash
+# Set bublik version (REQUIRED - Set this before proceeding)
+export BUBLIK_VERSION=2.1.0
+
+echo "Using Bublik version: $BUBLIK_VERSION"
+
 # 1. Clone repository
-# Example: `git clone --branch v2.1.0 --recurse-submodules https://github.com/ts-factory/bublik-docker.git $HOME/apps/bublik/versions/bublik-2.1.0`
-git clone --branch <version> --recurse-submodules https://github.com/ts-factory/bublik-docker.git $HOME/apps/bublik/versions/bublik-<version_without_v>
+git clone --branch "v$BUBLIK_VERSION" --recurse-submodules https://github.com/ts-factory/bublik-docker.git "$HOME/apps/bublik/versions/bublik-$BUBLIK_VERSION"
 
 # 2. Setup link to current deploy repo
-# Example: `ln -s $HOME/apps/bublik/versions/bublik-2.1.0 $HOME/apps/bublik/current`
-ln -s $HOME/apps/bublik/versions/bublik-<version_without_v> $HOME/apps/bublik/current
+ln -s "$HOME/apps/bublik/versions/bublik-$BUBLIK_VERSION" "$HOME/apps/bublik/current"
 ls -lha $HOME/apps/bublik | grep "current"
 
 # 3. Setup .env file
@@ -103,8 +136,7 @@ echo "HOST_UID=$(id -u)" >> $HOME/apps/bublik/config/.env
 echo "HOST_GID=$(id -g)" >> $HOME/apps/bublik/config/.env
 
 # 5. Set correct version so it pulls correct image versions
-# Example: `sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=2.1.0/' $HOME/apps/bublik/config/.env`
-sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<version_without_v>/' $HOME/apps/bublik/config/.env
+sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$BUBLIK_VERSION/" $HOME/apps/bublik/config/.env
 # Verify correct image tag is set
 cat $HOME/apps/bublik/current/.env | grep "IMAGE_TAG"
 
@@ -115,13 +147,13 @@ cd $HOME/apps/bublik/current && task pull
 docker image ls
 
 # 8. Save images
-docker save -o $HOME/apps/bublik/images/bublik-<version_without_v>.tar \
-  ghcr.io/ts-factory/bublik-nginx:<version_without_v> \
-  ghcr.io/ts-factory/bublik-log-server:<version_without_v> \
-  ghcr.io/ts-factory/bublik-runner:<version_without_v> \
-  redis:latest \
-  postgres:latest \
-  rabbitmq:3-management
+docker save -o "$HOME/apps/bublik/images/bublik-$BUBLIK_VERSION.tar" \
+  "ghcr.io/ts-factory/bublik-nginx:$BUBLIK_VERSION" \
+  "ghcr.io/ts-factory/bublik-log-server:$BUBLIK_VERSION" \
+  "ghcr.io/ts-factory/bublik-runner:$BUBLIK_VERSION" \
+  redis:8 \
+  postgres:17 \
+  rabbitmq:4-management
 ```
 
 #### Configuration
@@ -138,15 +170,16 @@ $HOME/apps/bublik/
 ├── deps/                      # Docker installation packages (.deb files)
 ├── bin/                       # Required executables (task, jq, curl, git)
 ├── images/                    # Docker images saved as .tar files
-│   └── bublik-<version>.tar
+│   └── bublik-${BUBLIK_VERSION}.tar
 ├── config/
 │   └── .env                   # Your configured environment file
 ├── versions/
-│   └── bublik-<version>/      # Complete Bublik repository with all components
-└── current -> versions/bublik-<version>/  # Symlink to active version
+│   └── bublik-${BUBLIK_VERSION}/      # Complete Bublik repository with all components
+└── current -> versions/bublik-${BUBLIK_VERSION}/  # Symlink to active version
 ```
 
 **Key components ready for transfer:**
+
 - ✅ All Docker dependencies and installation packages
 - ✅ Required executables (task, jq, curl, git)
 - ✅ Pre-pulled Docker images (saved as .tar archive)
@@ -215,9 +248,13 @@ docker compose version
 #### Finish Initial Deploy
 
 ```bash
+# Set the same version as used on preparation machine (REQUIRED)
+export BUBLIK_VERSION=2.1.0
+
+echo "Using Bublik version: $BUBLIK_VERSION"
+
 # 1. Load images
-# Example: `docker load -i $HOME/apps/bublik/images/bublik-2.1.0.tar`
-docker load -i $HOME/apps/bublik/images/bublik-<version_without_v>.tar
+docker load -i "$HOME/apps/bublik/images/bublik-$BUBLIK_VERSION.tar"
 
 # 2. Verify correct images loaded
 docker image ls
@@ -265,12 +302,16 @@ Actions in this section should be done on preparation machine
 #### Step 1: Prepare New Version
 
 ```bash
+# Set the NEW version you want to update to (REQUIRED)
+export BUBLIK_NEW_VERSION=2.2.0
+
+echo "Updating to Bublik version: $BUBLIK_NEW_VERSION"
+
 # 1. Clone new version repository
-# Example: `git clone --branch v2.1.0 --recurse-submodules https://github.com/ts-factory/bublik-docker.git $HOME/apps/bublik/versions/bublik-2.1.0`
-git clone --branch <version> --recurse-submodules https://github.com/ts-factory/bublik-docker.git $HOME/apps/bublik/versions/bublik-<version_without_v>
+git clone --branch "v$BUBLIK_NEW_VERSION" --recurse-submodules https://github.com/ts-factory/bublik-docker.git "$HOME/apps/bublik/versions/bublik-$BUBLIK_NEW_VERSION"
 
 # 2. Update preparation machine to new version
-ln -sfn $HOME/apps/bublik/versions/bublik-<version_without_v> $HOME/apps/bublik/current
+ln -sfn "$HOME/apps/bublik/versions/bublik-$BUBLIK_NEW_VERSION" "$HOME/apps/bublik/current"
 ls -lha $HOME/apps/bublik | grep "current"
 
 # 3. Re-link .env configuration
@@ -278,7 +319,7 @@ ln -sfn $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
 ls -lha $HOME/apps/bublik/current/.env | grep ".env"
 
 # 4. Set correct `IMAGE_TAG` to new version
-sed -i 's/^IMAGE_TAG=.*/IMAGE_TAG=<version_without_v>/' $HOME/apps/bublik/config/.env
+sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$BUBLIK_NEW_VERSION/" $HOME/apps/bublik/config/.env
 cat $HOME/apps/bublik/current/.env | grep "IMAGE_TAG"
 
 # 5. Pull new images
@@ -288,13 +329,13 @@ cd $HOME/apps/bublik/current && task pull
 docker image ls
 
 # 7. Save new version images
-docker save -o $HOME/apps/bublik/images/bublik-<version_without_v>.tar \
-  ghcr.io/ts-factory/bublik-nginx:<version_without_v> \
-  ghcr.io/ts-factory/bublik-log-server:<version_without_v> \
-  ghcr.io/ts-factory/bublik-runner:<version_without_v> \
-  redis:latest \
-  postgres:latest \
-  rabbitmq:3-management
+docker save -o "$HOME/apps/bublik/images/bublik-$BUBLIK_NEW_VERSION.tar" \
+  "ghcr.io/ts-factory/bublik-nginx:$BUBLIK_NEW_VERSION" \
+  "ghcr.io/ts-factory/bublik-log-server:$BUBLIK_NEW_VERSION" \
+  "ghcr.io/ts-factory/bublik-runner:$BUBLIK_NEW_VERSION" \
+  redis:8 \
+  postgres:17 \
+  rabbitmq:4-management
 ```
 
 #### Step 2: Create Update Package
@@ -303,18 +344,18 @@ At this point, you have successfully created a complete update package in `$HOME
 
 ```
 $HOME/apps/bublik/
-├── images/                    # Docker images saved as .tar files
-│   └── bublik-<version>.tar
+├── images/                                # Docker images saved as .tar files
+│   └── bublik-${BUBLIK_NEW_VERSION}.tar
 └── versions/
-    └── bublik-<version>/      # Complete Bublik repository with all components
+    └── bublik-${BUBLIK_NEW_VERSION}/      # Complete Bublik repository with all components
 ```
 
 ```bash
 # 1. Create update archive with new version repository and images
-tar czf $HOME/bublik-update-<version_without_v>.tar.gz -C $HOME apps/bublik/versions/bublik-<version_without_v> apps/bublik/images/bublik-<version_without_v>.tar
+tar czf "$HOME/bublik-update-$BUBLIK_NEW_VERSION.tar.gz" -C $HOME "apps/bublik/versions/bublik-$BUBLIK_NEW_VERSION" "apps/bublik/images/bublik-$BUBLIK_NEW_VERSION.tar"
 
 # 2. Transfer to deploy machine
-scp $HOME/bublik-update-<version_without_v>.tar.gz <deploy_machine>:~
+scp "$HOME/bublik-update-$BUBLIK_NEW_VERSION.tar.gz" <deploy_machine>:~
 ```
 
 ### Deployment Machine
@@ -337,18 +378,23 @@ cp backups/backup_*.sql $HOME/bublik-backup-$(date +%Y%m%d_%H%M%S).sql
 #### Step 4: Apply Update (On Deployment Machine)
 
 ```bash
+# Set the NEW version you're updating to (MUST match preparation machine)
+export BUBLIK_NEW_VERSION=2.2.0
+
+echo "Applying update to Bublik version: $BUBLIK_NEW_VERSION"
+
 # 1. Extract archive with update
 cd $HOME
-tar xzf bublik-update-<version_without_v>.tar.gz
+tar xzf "bublik-update-$BUBLIK_NEW_VERSION.tar.gz"
 
 # 2. Load new images
-docker load -i $HOME/apps/bublik/images/bublik-<version_without_v>.tar
+docker load -i "$HOME/apps/bublik/images/bublik-$BUBLIK_NEW_VERSION.tar"
 
 # 3. Verify new images loaded
 docker image ls
 
 # 4. Re-link to new version
-ln -sfn $HOME/apps/bublik/versions/bublik-<version_without_v> $HOME/apps/bublik/current
+ln -sfn "$HOME/apps/bublik/versions/bublik-$BUBLIK_NEW_VERSION" "$HOME/apps/bublik/current"
 # Verify link
 ls -lha $HOME/apps/bublik | grep "current"
 
@@ -358,7 +404,7 @@ ln -sfn $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
 ls -lha $HOME/apps/bublik/current/.env | grep ".env"
 
 # 6. Update IMAGE_TAG in configuration
-sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=<version_without_v>/" $HOME/apps/bublik/config/.env
+sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$BUBLIK_NEW_VERSION/" $HOME/apps/bublik/config/.env
 # Verify IMAGE_TAG is correctly set
 cat $HOME/apps/bublik/config/.env | grep "IMAGE_TAG"
 ```
@@ -392,14 +438,32 @@ docker compose ps
 **Execution Steps**:
 
 1. **Update 1.7.0 → 1.8.0**
+
+   ```bash
+   export BUBLIK_NEW_VERSION=1.8.0
+   # Follow update process
+   ```
+
    - Review 1.8.0 release notes
    - Test functionality before proceeding
 
 2. **Update 1.8.0 → 1.9.0**
+
+   ```bash
+   export BUBLIK_NEW_VERSION=1.9.0
+   # Follow update process
+   ```
+
    - Review 1.9.0 release notes
    - Test functionality before proceeding
 
 3. **Update 1.9.0 → 1.10.0**
+
+   ```bash
+   export BUBLIK_NEW_VERSION=1.10.0
+   # Follow update process
+   ```
+
    - Review 1.10.0 release notes
    - Final testing and validation
 
@@ -408,6 +472,7 @@ docker compose ps
 ## Post-Deployment
 
 **Startup Information:**
+
 - Initial startup may take up to 30 seconds
 - Check logs with `docker compose logs -f` if needed
 - By default Bublik **will be served on port 80**, you can adjust this by editing `BUBLIK_DOCKER_PROXY_PORT` in `$HOME/apps/bublik/config/.env`
