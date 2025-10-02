@@ -47,6 +47,20 @@ We assume `amd64` in below instructions
 
 ### Preparation Machine
 
+#### Create Bublik User
+
+```bash
+# Create bublik user with home directory
+sudo useradd -m -s /bin/bash bublik
+
+# Create and set ownership of bublik directory
+sudo mkdir -p /opt/bublik-docker
+sudo chown -R bublik:bublik /opt/bublik-docker
+
+# Add bublik user to docker group (will be needed after docker installation)
+sudo usermod -aG docker bublik
+```
+
 #### Install Dependencies
 
 ```bash
@@ -69,6 +83,9 @@ sudo usermod -aG docker $USER
 newgrp docker
 
 source $HOME/.bashrc
+
+# Switch to bublik user for all remaining operations
+sudo su - bublik
 ```
 
 **Verify installation:**
@@ -83,6 +100,8 @@ docker --version
 docker compose version
 ```
 
+**All subsequent commands in this guide should be run as the `bublik` user.**
+
 #### Prepare Initial Deploy
 
 You will now create deploy package to transfer to deployment machine
@@ -91,24 +110,23 @@ You will now create deploy package to transfer to deployment machine
 
 ```bash
 # 1. Setup directories
-mkdir -p $HOME/apps/bublik
-mkdir -p $HOME/apps/bublik/deps
-mkdir -p $HOME/apps/bublik/bin
-mkdir -p $HOME/apps/bublik/images
-mkdir -p $HOME/apps/bublik/versions
-mkdir -p $HOME/apps/bublik/config
+mkdir -p /opt/bublik-docker/deps
+mkdir -p /opt/bublik-docker/bin
+mkdir -p /opt/bublik-docker/images
+mkdir -p /opt/bublik-docker/versions
+mkdir -p /opt/bublik-docker/config
 
 # 2. Prepare required binaries
-cp $(which task) $HOME/apps/bublik/bin
+cp $(which task) /opt/bublik-docker/bin
 # Skip if deployment machine have jq already installed
-cp $(which jq) $HOME/apps/bublik/bin
+cp $(which jq) /opt/bublik-docker/bin
 # Skip if deployment machine have curl already installed
-cp $(which curl) $HOME/apps/bublik/bin
+cp $(which curl) /opt/bublik-docker/bin
 # Skip if deployment machine has git already installed
-cp $(which git) $HOME/apps/bublik/bin
+cp $(which git) /opt/bublik-docker/bin
 
 # 3. Download Docker packages
-cd $HOME/apps/bublik/deps && apt download docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && cd -
+cd /opt/bublik-docker/deps && apt download docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && cd -
 ```
 
 #### Setup Preparation Machine
@@ -120,34 +138,34 @@ export BUBLIK_VERSION=2.1.0
 echo "Using Bublik version: $BUBLIK_VERSION"
 
 # 1. Clone repository
-git clone --branch "v$BUBLIK_VERSION" --recurse-submodules https://github.com/ts-factory/bublik-docker.git "$HOME/apps/bublik/versions/bublik-$BUBLIK_VERSION"
+git clone --branch "v$BUBLIK_VERSION" --recurse-submodules https://github.com/ts-factory/bublik-docker.git "/opt/bublik-docker/versions/bublik-$BUBLIK_VERSION"
 
 # 2. Setup link to current deploy repo
-ln -s "$HOME/apps/bublik/versions/bublik-$BUBLIK_VERSION" "$HOME/apps/bublik/current"
-ls -lha $HOME/apps/bublik | grep "current"
+ln -s "/opt/bublik-docker/versions/bublik-$BUBLIK_VERSION" "/opt/bublik-docker/current"
+ls -lha /opt/bublik-docker | grep "current"
 
 # 3. Setup .env file
-cp $HOME/apps/bublik/current/.env.example $HOME/apps/bublik/config/.env
-ln -s $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
-ls -lha $HOME/apps/bublik/current/.env | grep ".env"
+cp /opt/bublik-docker/current/.env.example /opt/bublik-docker/config/.env
+ln -s /opt/bublik-docker/config/.env /opt/bublik-docker/current/.env
+ls -lha /opt/bublik-docker/current/.env | grep ".env"
 
 # 4. Setup IDs (needed for correct permissions)
-echo "HOST_UID=$(id -u)" >> $HOME/apps/bublik/config/.env
-echo "HOST_GID=$(id -g)" >> $HOME/apps/bublik/config/.env
+echo "HOST_UID=$(id -u)" >> /opt/bublik-docker/config/.env
+echo "HOST_GID=$(id -g)" >> /opt/bublik-docker/config/.env
 
 # 5. Set correct version so it pulls correct image versions
-sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$BUBLIK_VERSION/" $HOME/apps/bublik/config/.env
+sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$BUBLIK_VERSION/" /opt/bublik-docker/config/.env
 # Verify correct image tag is set
-cat $HOME/apps/bublik/current/.env | grep "IMAGE_TAG"
+cat /opt/bublik-docker/current/.env | grep "IMAGE_TAG"
 
 # 6. Pull images
-cd $HOME/apps/bublik/current && task pull
+cd /opt/bublik-docker/current && task pull
 
 # 7. Check that images pulled
 docker image ls
 
 # 8. Save images
-docker save -o "$HOME/apps/bublik/images/bublik-$BUBLIK_VERSION.tar" \
+docker save -o "/opt/bublik-docker/images/bublik-$BUBLIK_VERSION.tar" \
   "ghcr.io/ts-factory/bublik-nginx:$BUBLIK_VERSION" \
   "ghcr.io/ts-factory/bublik-log-server:$BUBLIK_VERSION" \
   "ghcr.io/ts-factory/bublik-runner:$BUBLIK_VERSION" \
@@ -158,15 +176,15 @@ docker save -o "$HOME/apps/bublik/images/bublik-$BUBLIK_VERSION.tar" \
 
 #### Configuration
 
-1. Edit the `.env` file: `$HOME/apps/bublik/config/.env`
+1. Edit the `.env` file: `/opt/bublik-docker/config/.env`
 2. Follow the configuration guide: [Bublik Configuration Documentation](https://ts-factory.github.io/bublik-release/docker/setup#4-configure-environment)
 
 #### What You Have Prepared
 
-At this point, you have successfully created a complete deployment package in `$HOME/apps/bublik/` containing:
+At this point, you have successfully created a complete deployment package in `/opt/bublik-docker/` containing:
 
 ```
-$HOME/apps/bublik/
+/opt/bublik-docker/
 ├── deps/                      # Docker installation packages (.deb files)
 ├── bin/                       # Required executables (task, jq, curl, git)
 ├── images/                    # Docker images saved as .tar files
@@ -192,25 +210,41 @@ Now we'll package everything and transfer it to your air-gapped deployment machi
 
 ```bash
 # 1. Create Archive
-tar czf $HOME/bublik-deploy.tar.gz -C $HOME apps
+tar czf /tmp/bublik-deploy.tar.gz -C /opt bublik-docker
 
 # 2. Transfer everything to deploy machine
-scp $HOME/bublik-deploy.tar.gz <deploy_machine>:~
+scp /tmp/bublik-deploy.tar.gz <deploy_machine>:~
 ```
 
 ---
 
 ### Deploy Machine
 
+#### Create Bublik User
+
+```bash
+# Create bublik user with home directory
+sudo useradd -m -s /bin/bash bublik
+
+# Create and set ownership of bublik directory
+sudo mkdir -p /opt/bublik-docker
+sudo chown -R bublik:bublik /opt/bublik-docker
+
+# Switch to bublik user for all remaining operations
+sudo su - bublik
+```
+
+#### Extract Deployment Package
+
 ```bash
 # 1. Extract initial deploy version
-tar xzf $HOME/bublik-deploy.tar.gz
+tar xzf ~/bublik-deploy.tar.gz -C /opt
 
 # 2. Add packaged binaries to PATH
-echo 'export PATH="$HOME/apps/bublik/bin:$PATH"' >> ~/.bashrc
+echo 'export PATH="/opt/bublik-docker/bin:$PATH"' >> ~/.bashrc
 
 # 3. Remove archive
-rm bublik-deploy.tar.gz
+rm ~/bublik-deploy.tar.gz
 
 # 4. Apply change to bashrc
 source ~/.bashrc
@@ -224,8 +258,8 @@ You can skip this step if you follow official guide
 :::
 
 ```bash
-sudo dpkg -i $HOME/apps/bublik/deps/*.deb
-sudo usermod -aG docker $USER
+sudo dpkg -i /opt/bublik-docker/deps/*.deb
+sudo usermod -aG docker bublik
 newgrp docker
 ```
 
@@ -240,9 +274,11 @@ docker --version
 docker compose version
 ```
 
+**All subsequent commands in this guide should be run as the `bublik` user.**
+
 #### Configuration
 
-1. Edit the `.env` file: `$HOME/apps/bublik/config/.env`
+1. Edit the `.env` file: `/opt/bublik-docker/config/.env`
 2. Follow the configuration guide: [Bublik Configuration Documentation](https://ts-factory.github.io/bublik-release/docker/setup#4-configure-environment)
 
 #### Finish Initial Deploy
@@ -254,25 +290,25 @@ export BUBLIK_VERSION=2.1.0
 echo "Using Bublik version: $BUBLIK_VERSION"
 
 # 1. Load images
-docker load -i "$HOME/apps/bublik/images/bublik-$BUBLIK_VERSION.tar"
+docker load -i "/opt/bublik-docker/images/bublik-$BUBLIK_VERSION.tar"
 
 # 2. Verify correct images loaded
 docker image ls
 
 # 3. Go to currently linked repo version
-cd $HOME/apps/bublik/current
+cd /opt/bublik-docker/current
 
 # 4. Link configuration
-ln -sfn $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
+ln -sfn /opt/bublik-docker/config/.env /opt/bublik-docker/current/.env
 # Verify link
-ls -lha $HOME/apps/bublik/current/.env | grep ".env"
+ls -lha /opt/bublik-docker/current/.env | grep ".env"
 
 # 5. Adjust UID and GUID in case it's different from prep machine in case they different
-sed -i "s/^HOST_UID=.*/HOST_UID=$(id -u)/" $HOME/apps/bublik/config/.env
-sed -i "s/^HOST_GID=.*/HOST_GID=$(id -g)/" $HOME/apps/bublik/config/.env
+sed -i "s/^HOST_UID=.*/HOST_UID=$(id -u)/" /opt/bublik-docker/config/.env
+sed -i "s/^HOST_GID=.*/HOST_GID=$(id -g)/" /opt/bublik-docker/config/.env
 
 # 6. Verify correct image tag is set
-cat $HOME/apps/bublik/current/.env | grep "IMAGE_TAG"
+cat /opt/bublik-docker/current/.env | grep "IMAGE_TAG"
 
 # 7. To start application
 task up
@@ -308,28 +344,28 @@ export BUBLIK_NEW_VERSION=2.2.0
 echo "Updating to Bublik version: $BUBLIK_NEW_VERSION"
 
 # 1. Clone new version repository
-git clone --branch "v$BUBLIK_NEW_VERSION" --recurse-submodules https://github.com/ts-factory/bublik-docker.git "$HOME/apps/bublik/versions/bublik-$BUBLIK_NEW_VERSION"
+git clone --branch "v$BUBLIK_NEW_VERSION" --recurse-submodules https://github.com/ts-factory/bublik-docker.git "/opt/bublik-docker/versions/bublik-$BUBLIK_NEW_VERSION"
 
 # 2. Update preparation machine to new version
-ln -sfn "$HOME/apps/bublik/versions/bublik-$BUBLIK_NEW_VERSION" "$HOME/apps/bublik/current"
-ls -lha $HOME/apps/bublik | grep "current"
+ln -sfn "/opt/bublik-docker/versions/bublik-$BUBLIK_NEW_VERSION" "/opt/bublik-docker/current"
+ls -lha /opt/bublik-docker | grep "current"
 
 # 3. Re-link .env configuration
-ln -sfn $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
-ls -lha $HOME/apps/bublik/current/.env | grep ".env"
+ln -sfn /opt/bublik-docker/config/.env /opt/bublik-docker/current/.env
+ls -lha /opt/bublik-docker/current/.env | grep ".env"
 
 # 4. Set correct `IMAGE_TAG` to new version
-sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$BUBLIK_NEW_VERSION/" $HOME/apps/bublik/config/.env
-cat $HOME/apps/bublik/current/.env | grep "IMAGE_TAG"
+sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$BUBLIK_NEW_VERSION/" /opt/bublik-docker/config/.env
+cat /opt/bublik-docker/current/.env | grep "IMAGE_TAG"
 
 # 5. Pull new images
-cd $HOME/apps/bublik/current && task pull
+cd /opt/bublik-docker/current && task pull
 
 # 6. Check that images pulled
 docker image ls
 
 # 7. Save new version images
-docker save -o "$HOME/apps/bublik/images/bublik-$BUBLIK_NEW_VERSION.tar" \
+docker save -o "/opt/bublik-docker/images/bublik-$BUBLIK_NEW_VERSION.tar" \
   "ghcr.io/ts-factory/bublik-nginx:$BUBLIK_NEW_VERSION" \
   "ghcr.io/ts-factory/bublik-log-server:$BUBLIK_NEW_VERSION" \
   "ghcr.io/ts-factory/bublik-runner:$BUBLIK_NEW_VERSION" \
@@ -340,10 +376,10 @@ docker save -o "$HOME/apps/bublik/images/bublik-$BUBLIK_NEW_VERSION.tar" \
 
 #### Step 2: Create Update Package
 
-At this point, you have successfully created a complete update package in `$HOME` containing:
+At this point, you have successfully created a complete update package in `/opt/bublik-docker` containing:
 
 ```
-$HOME/apps/bublik/
+/opt/bublik-docker/
 ├── images/                                # Docker images saved as .tar files
 │   └── bublik-${BUBLIK_NEW_VERSION}.tar
 └── versions/
@@ -352,10 +388,10 @@ $HOME/apps/bublik/
 
 ```bash
 # 1. Create update archive with new version repository and images
-tar czf "$HOME/bublik-update-$BUBLIK_NEW_VERSION.tar.gz" -C $HOME "apps/bublik/versions/bublik-$BUBLIK_NEW_VERSION" "apps/bublik/images/bublik-$BUBLIK_NEW_VERSION.tar"
+tar czf "/tmp/bublik-update-$BUBLIK_NEW_VERSION.tar.gz" -C /opt/bublik-docker "versions/bublik-$BUBLIK_NEW_VERSION" "images/bublik-$BUBLIK_NEW_VERSION.tar"
 
 # 2. Transfer to deploy machine
-scp "$HOME/bublik-update-$BUBLIK_NEW_VERSION.tar.gz" <deploy_machine>:~
+scp "/tmp/bublik-update-$BUBLIK_NEW_VERSION.tar.gz" <deploy_machine>:~
 ```
 
 ### Deployment Machine
@@ -366,13 +402,13 @@ Actions in this section should be done on deployment machine
 
 ```bash
 # 1. Go to current deploy
-cd $HOME/apps/bublik/current
+cd /opt/bublik-docker/current
 
 # 2. Create DB backup
 task backup:create
 
 # 3. Copy backup to safe location
-cp backups/backup_*.sql $HOME/bublik-backup-$(date +%Y%m%d_%H%M%S).sql
+cp backups/backup_*.sql /tmp/bublik-backup-$(date +%Y%m%d_%H%M%S).sql
 ```
 
 #### Step 4: Apply Update (On Deployment Machine)
@@ -384,36 +420,35 @@ export BUBLIK_NEW_VERSION=2.2.0
 echo "Applying update to Bublik version: $BUBLIK_NEW_VERSION"
 
 # 1. Extract archive with update
-cd $HOME
-tar xzf "bublik-update-$BUBLIK_NEW_VERSION.tar.gz"
+tar xzf ~/bublik-update-$BUBLIK_NEW_VERSION.tar.gz -C /opt/bublik-docker
 
 # 2. Load new images
-docker load -i "$HOME/apps/bublik/images/bublik-$BUBLIK_NEW_VERSION.tar"
+docker load -i "/opt/bublik-docker/images/bublik-$BUBLIK_NEW_VERSION.tar"
 
 # 3. Verify new images loaded
 docker image ls
 
 # 4. Re-link to new version
-ln -sfn "$HOME/apps/bublik/versions/bublik-$BUBLIK_NEW_VERSION" "$HOME/apps/bublik/current"
+ln -sfn "/opt/bublik-docker/versions/bublik-$BUBLIK_NEW_VERSION" "/opt/bublik-docker/current"
 # Verify link
-ls -lha $HOME/apps/bublik | grep "current"
+ls -lha /opt/bublik-docker | grep "current"
 
 # 5. Re-link old configuration
-ln -sfn $HOME/apps/bublik/config/.env $HOME/apps/bublik/current/.env
+ln -sfn /opt/bublik-docker/config/.env /opt/bublik-docker/current/.env
 # Verify link
-ls -lha $HOME/apps/bublik/current/.env | grep ".env"
+ls -lha /opt/bublik-docker/current/.env | grep ".env"
 
 # 6. Update IMAGE_TAG in configuration
-sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$BUBLIK_NEW_VERSION/" $HOME/apps/bublik/config/.env
+sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$BUBLIK_NEW_VERSION/" /opt/bublik-docker/config/.env
 # Verify IMAGE_TAG is correctly set
-cat $HOME/apps/bublik/config/.env | grep "IMAGE_TAG"
+cat /opt/bublik-docker/config/.env | grep "IMAGE_TAG"
 ```
 
 #### Step 5: Start Updated Application (On Deployment Machine)
 
 ```bash
 # 1. Navigate to new current version
-cd $HOME/apps/bublik/current
+cd /opt/bublik-docker/current
 
 # 2. Start updated application
 task up
@@ -475,12 +510,12 @@ docker compose ps
 
 - Initial startup may take up to 30 seconds
 - Check logs with `docker compose logs -f` if needed
-- By default Bublik **will be served on port 80**, you can adjust this by editing `BUBLIK_DOCKER_PROXY_PORT` in `$HOME/apps/bublik/config/.env`
+- By default Bublik **will be served on port 80**, you can adjust this by editing `BUBLIK_DOCKER_PROXY_PORT` in `/opt/bublik-docker/config/.env`
 
 ### Access Your Application
 
 - Navigate to `http://<target_machine_ip>` in your browser
-- Default ports are defined in your `$HOME/apps/bublik/config/.env` file
+- Default ports are defined in your `/opt/bublik-docker/config/.env` file
 
 ### Database Migration (If Applicable)
 
@@ -494,7 +529,7 @@ pg_dump -h <db_host> -U <username> -d bublik -f backup_$(date +%Y%m%d_%H%M%S).sq
 scp backup_*.sql <deploy_machine>:~/
 
 # 3. On deploy machine - restore database
-cd $HOME/apps/bublik/current
+cd /opt/bublik-docker/current
 task backup:restore -- <path_to_backup.sql>
 
 # 4. Restart application
