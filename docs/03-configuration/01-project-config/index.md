@@ -9,7 +9,10 @@ title: Project
 - [Update config from UI](#update-config-from-ui)
 - [Format](#format)
   - [Example Configuration](#example-configuration)
-- [Per-project Conception](#per-project-conception)
+- [Multi-Project Support](#multi-project-support)
+  - [How Multi-Project Works](#how-multi-project-works)
+  - [Project Configuration Structure](#project-configuration-structure)
+  - [Managing Projects](#managing-projects)
 - [Configuration Areas](#configuration-areas)
   - [Dashboard Configuration](#dashboard-configuration)
     - [DASHBOARD_HEADER](#dashboard_header)
@@ -18,13 +21,19 @@ title: Project
     - [DASHBOARD_DATE](#dashboard_date)
     - [DASHBOARD_RUNS_SORT](#dashboard_runs_sort)
     - [DASHBOARD_DEFAULT_MODE](#dashboard_default_mode)
+  - [UI Configuration](#ui-configuration)
+    - [TAB_TITLE_PREFIX](#tab_title_prefix)
   - [Metadata Configuration](#metadata-configuration)
     - [Metadata on Pages](#metadata-on-pages)
     - [Special Categories](#special-categories)
   - [Run Configuration](#run-configuration)
     - [Run Completion File](#run-completion-file)
     - [Run Uniqueness](#run-uniqueness)
-- [Applying Changes](#applying-changes) - [Configuration Updates](#configuration-updates) - [CSRF Configuration](#csrf-configuration)
+  - [Permission Configuration](#permission-configuration)
+    - [NOT_PERMISSION_REQUIRED_ACTIONS](#not_permission_required_actions)
+- [Applying Changes](#applying-changes)
+  - [Configuration Updates](#configuration-updates)
+  - [CSRF Configuration](#csrf-configuration)
 <!--toc:end-->
 
 ## Update config from UI
@@ -219,6 +228,10 @@ You can find the active schema definition at: [URL](https://github.com/ts-factor
         "type": "string"
       },
       "uniqueItems": true
+    },
+    "TAB_TITLE_PREFIX": {
+      "description": "Custom prefix for browser tab titles",
+      "type": "string"
     }
   },
   "required": [
@@ -239,6 +252,7 @@ You can find the active schema definition at: [URL](https://github.com/ts-factor
 ```json
 {
   "PROJECT": "ts-factory",
+  "TAB_TITLE_PREFIX": "TS Factory",
   "RUN_KEY_METAS": ["START_TIMESTAMP", "CFG"],
   "DASHBOARD_DATE": "CAMPAIGN_DATE",
   "RUN_STATUS_META": "RUN_STATUS",
@@ -293,13 +307,58 @@ You can find the active schema definition at: [URL](https://github.com/ts-factor
   "CSRF_TRUSTED_ORIGINS": [],
   "DASHBOARD_DEFAULT_MODE": "two_days_two_columns",
   "EMAIL_PROJECT_WATCHERS": [],
-  "RUN_STATUS_BY_NOK_BORDERS": [20, 80]
+  "RUN_STATUS_BY_NOK_BORDERS": [20, 80],
+  "NOT_PERMISSION_REQUIRED_ACTIONS": ["import"]
 }
 ```
 
-## Per-project Conception
+## Multi-Project Support
 
-All **metas** that users can apply to customize their Bublik pages originate from `metadata.json`. **Tags** are special metas that come from TE log and cannot be modified within Bublik.
+A single Bublik instance can manage multiple projects, each with its own configuration, dashboard settings, and test runs. This allows organizations to organize test results by product, team, or test suite while maintaining a unified platform.
+
+### How Multi-Project Works
+
+1. **Project Association**: Runs are associated with projects through the `PROJECT` meta field in `meta_data.json`. This must be set before importing the run.
+
+2. **Configuration Inheritance**:
+   - **Default configurations** apply to runs without project-specific configs
+   - **Project-specific configurations** override only the attributes that need to be different
+   - Missing attributes in project configs fall back to default values
+
+3. **Project-Based Filtering**: All pages (dashboard, history, runs, import events) support filtering by project through the project picker in the sidebar.
+
+4. **Run Uniqueness**: The `RUN_KEY_METAS` configuration determines what makes a run unique within a project.
+
+### Project Configuration Structure
+
+All **metas** that users can apply to customize their Bublik pages originate from `meta_data.json`. **Tags** are special metas that come from TE log and cannot be modified within Bublik.
+
+To assign a run to a project, include the `PROJECT` meta in your `meta_data.json`:
+
+```json
+{
+  "metas": [
+    {
+      "name": "PROJECT",
+      "value": "my-project"
+    }
+  ]
+}
+```
+
+### Managing Projects
+
+Projects can be created, renamed, and deleted through the Configuration Manager in the admin interface:
+
+1. **Creating a Project**: Navigate to Admin > Configuration Manager and create a new project configuration with the desired `PROJECT` value.
+
+2. **Renaming a Project**: Update the `PROJECT` field in the configuration. Note that existing runs will remain associated with the old project name.
+
+3. **Deleting a Project**: Projects can only be deleted if they have no associated runs. To delete a project with runs, first delete or reassign those runs.
+
+:::warning
+Runs cannot be reassigned to different projects through the UI. To change a run's project, you must delete the run and re-import it with the correct `PROJECT` meta value.
+:::
 
 ## Configuration Areas
 
@@ -354,6 +413,20 @@ Sets the default dashboard view mode (UI-V2 only):
 - `one_day_two_columns`
 - `two_days_two_columns`
 
+### UI Configuration
+
+#### TAB_TITLE_PREFIX
+
+Sets a custom prefix for browser tab titles. This helps users identify which Bublik instance or project they are viewing when multiple tabs are open.
+
+```json
+{
+  "TAB_TITLE_PREFIX": "DPDK Testing"
+}
+```
+
+With this setting, browser tabs will display titles like "DPDK Testing - Dashboard" or "DPDK Testing - Run #12345".
+
 ### Metadata Configuration
 
 #### Metadata on Pages
@@ -373,6 +446,30 @@ The `RUN_COMPLETE_FILE` setting in `perconf.py` specifies the filename (accessed
 #### Run Uniqueness
 
 Bublik distinguishes runs using metas defined in `RUN_KEY_METAS` setting in `perconf.py`, represented as a list of meta names.
+
+### Permission Configuration
+
+#### NOT_PERMISSION_REQUIRED_ACTIONS
+
+Specifies actions that do not require administrator rights for this project. This allows certain operations to be performed by non-admin users.
+
+Available actions include:
+
+- `import` - Allow non-admin users to import runs
+- `delete_run` - Allow non-admin users to delete runs
+- `comment` - Allow non-admin users to add comments
+
+Example configuration:
+
+```json
+{
+  "NOT_PERMISSION_REQUIRED_ACTIONS": ["import", "comment"]
+}
+```
+
+:::note
+This setting provides flexible read permissions, allowing you to open up specific operations without granting full admin access.
+:::
 
 ## Applying Changes
 

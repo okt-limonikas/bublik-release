@@ -10,8 +10,16 @@ title: Report
     - [Test Configuration Fields](#test-configuration-fields)
     - [Example Configuration](#example-configuration)
   - [Understanding the Example](#understanding-the-example)
+  - [Chart Features](#chart-features)
+    - [Stacked Charts](#stacked-charts)
+    - [Multi-Argument Overlays](#multi-argument-overlays)
+    - [Canvas Renderer](#canvas-renderer)
+  - [Table Features](#table-features)
+    - [Gain Column](#gain-column)
+    - [Table of Contents](#table-of-contents)
   - [Location](#location)
   - [Configuration Guidelines](#configuration-guidelines)
+  - [Configuration Validation](#configuration-validation)
 <!--toc:end-->
 
 To build a run report, an appropriate configuration is required.
@@ -320,6 +328,88 @@ Let's break down the key components of this example:
 6. **Ordering**:
    - Results ordered by flow control, RX cores, and RX queue parameters
 
+## Chart Features
+
+Reports support advanced chart visualization features for better data analysis.
+
+### Stacked Charts
+
+Stacked charts allow you to combine multiple measurements into a unified plot for comparison:
+
+1. **Selecting Charts to Stack**: Use the plus button on a chart to select additional charts for stacking
+2. **Unified Display**: Selected charts are displayed together with a common axis
+3. **Real-time Updates**: Charts update in real-time as you add or remove series
+
+Stacked charts are useful for:
+- Comparing throughput across different configurations
+- Visualizing performance trends across test parameters
+- Analyzing multiple metrics simultaneously
+
+### Multi-Argument Overlays
+
+Multi-argument overlays allow you to display data from different argument values on the same chart:
+
+```json
+{
+  "tests": {
+    "perf_test": {
+      "overlays": {
+        "arg": "queue_count",
+        "values": ["1", "2", "4"]
+      }
+    }
+  }
+}
+```
+
+This configuration overlays results for queue counts 1, 2, and 4 on the same chart, making it easy to compare performance across configurations.
+
+:::note
+Overlay arguments must be unique across base series. Configuration validation will detect conflicts between overlay settings.
+:::
+
+### Canvas Renderer
+
+For reports with large datasets, Bublik uses a canvas-based renderer for improved performance:
+
+- **Automatic Detection**: Canvas renderer is enabled automatically for charts with many data points
+- **Smooth Interaction**: Zooming, panning, and hovering remain responsive even with thousands of points
+- **Y-Axis Limits**: Toggle to limit Y-axis values to the min/max range of the data
+
+The chart toolbar provides controls for:
+- Zooming and panning
+- Toggling Y-axis limits
+- Exporting chart images
+
+## Table Features
+
+### Gain Column
+
+The gain column shows performance differences relative to a base value:
+
+- **Automatic Pairing**: Gain columns are automatically paired with their corresponding base columns
+- **Percentage Display**: Shows the percentage change from the baseline
+- **Visual Indicators**: Positive and negative changes are highlighted for quick identification
+
+Configure the base value for gain calculations using `percentage_base_value` in the sequences configuration:
+
+```json
+{
+  "sequences": {
+    "arg": "burst_size",
+    "percentage_base_value": 32
+  }
+}
+```
+
+### Table of Contents
+
+Reports include a table of contents (TOC) for easy navigation:
+
+- **Auto-generated**: TOC is automatically generated from test configurations
+- **URL Persistence**: Open/close states are preserved in the URL
+- **Quick Navigation**: Click entries to jump to specific sections
+
 ## Location
 
 All run report configuration files must be stored in the `<PER_CONF_DIR>/reports` directory.
@@ -336,3 +426,14 @@ All run report configuration files must be stored in the `<PER_CONF_DIR>/reports
 8. Order records logically for easy analysis
 
 For more examples and templates, refer to the _report_config.json_ file in your installation.
+
+## Configuration Validation
+
+Report configurations are validated against the JSON schema to ensure correctness:
+
+1. **Extra Keys Detection**: The schema disallows extra keys not defined in the specification
+2. **Base Series Uniqueness**: Ensures base series configurations are unique
+3. **Overlay Conflict Detection**: Validates that overlay arguments don't conflict across series
+4. **Required Fields**: Verifies all mandatory fields are present
+
+Validation errors are displayed in the configuration editor with clear messages indicating what needs to be corrected.
