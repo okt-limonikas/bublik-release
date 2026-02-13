@@ -1,11 +1,11 @@
 ---
-title: Release v2.9.0
+title: Release v2.9.1
 authors: [okt-limonikas, ol-nata]
 tags: [release]
-slug: release-v2.9.0
+slug: release-v2.9.1
 ---
 
-We're excited to announce Bublik v2.9.0!
+We're excited to announce Bublik v2.9.1!
 This release focuses on frontend usability and clarity, with faster run navigation, better chart readability, and clearer time context in the UI. We also unified error handling across the backend to ensure consistent response formats, enabling a uniform error experience in the UI, enhanced the security of user-facing error data, and improved initial load performance.
 
 ### What's New
@@ -30,7 +30,7 @@ Improved color contrast makes charts easier to read at a glance.
 
 1. `cd bublik`
 2. `git remote update`
-3. `git checkout v2.9.0`
+3. `git checkout v2.9.1`
 4. `./scripts/deploy --steps pip_requirements django_settings run_services`
 
 ### Frontend Update
@@ -39,7 +39,7 @@ Improved color contrast makes charts easier to read at a glance.
 2. Synchronize the mirrors
 3. `cd bublik-ui`
 4. `git remote update`
-5. `git checkout v2.9.0`
+5. `git checkout v2.9.1`
 
 ### Documentation Update
 
@@ -47,12 +47,12 @@ Improved color contrast makes charts easier to read at a glance.
 2. Synchronize the mirrors
 3. `cd bublik-docs`
 4. `git remote update`
-5. `git checkout v2.9.0`
+5. `git checkout v2.9.1`
 
 ### Docker Instance Update
 
 1. `task backup:create`
-2. Open your `.env` file and change `IMAGE_TAG` to `2.9.0`
+2. Open your `.env` file and change `IMAGE_TAG` to `2.9.1`
 3. `task pull`
 4. `task up`
 
@@ -80,6 +80,8 @@ Improved color contrast makes charts easier to read at a glance.
 * **runs:** filter runs by clicked conclusion in bar chart modal ([489dfb0](https://github.com/ts-factory/bublik-ui/commit/489dfb06ac43119aa950923ec6ef3c6eeea7fe8c))
 * **run:** show timezone offset in GMT format for dates column header ([80cd576](https://github.com/ts-factory/bublik-ui/commit/80cd57605c5a021cc5c3405ac4b580b3097e81d8))
 * **types:** update component types for React 19 compatibility and fix lint issues ([6429c60](https://github.com/ts-factory/bublik-ui/commit/6429c60fe47a90d8c4f915837362440e8674259b))
+* **result:** crash caused by incorrect import from react-router ([a9ce75c](https://github.com/ts-factory/bublik-ui/commit/a9ce75c20836134db1af29b765f33dcee609f4b5))
+
 
 
 #### ♻ Code Refactoring
