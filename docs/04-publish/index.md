@@ -45,6 +45,8 @@ Several ways:
  - via curl command:
    - `curl --negotiate -u : "${BUBLIK_URL}/importruns/source/?url=${logs_url}&force=true"`
    - where `logs_url` should point to **directory** with the logs in a given format.
+- by uploading the `te_logs.tar` made by TE's `publish_logs`, from the
+  `Import` dialog or with curl: see [Upload Log Tarballs](./03-upload-tarballs.md)
 
 Import section contains all the details regarding latest import attempts and if
 they were successful.
