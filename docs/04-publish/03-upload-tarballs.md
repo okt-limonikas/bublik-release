@@ -120,6 +120,32 @@ The tarball gets the same checks a TE log server applies
 The run is stored with the log server's layout,
 `<prefix>/TS_NAME/YYYY/MM/DD/CFG[-USER]-HH:MM:SS/`.
 
+### Bundles with ready-made log pages
+
+A run made outside TE, such as a Playwright report converted by
+`bublik-e2e playwright`, can be uploaded the same way. Its tar holds
+`bublik.json` instead of `raw_log_bundle.tpxz`, so it has these files:
+
+- `meta_data.json` and `bublik.json` at the top level, with an optional `.done`;
+- its JSON log pages under `json/`;
+- its attachments under `attachments/` (`attachments/node_id<N>/attachments.json`
+  and the files it names).
+
+Files may be nested only under `json/` and `attachments/`, as plain relative
+paths. Directory entries are allowed and links are not. `TS_NAME`, `CFG` and
+`USER` may be up to 64 characters, not 32. Everything is stored as it is.
+Bublik serves the pages and attachments straight from S3 and has nothing
+to generate.
+
+```bash
+tar -C bundle -cf bundle.tar meta_data.json bublik.json .done json attachments
+curl -H "Authorization: Bearer ${BUBLIK_TOKEN}" -F file=@bundle.tar \
+     "${BUBLIK_URL}/api/v2/importruns/upload/"
+```
+
+`bublik-e2e playwright --upload --url "$BUBLIK_URL" --token "$BUBLIK_TOKEN"`
+writes the bundle and uploads it in one step.
+
 | Status | Meaning |
 |---|---|
 | 400 | invalid tarball or metas, unknown project, or no upload storage |
