@@ -135,7 +135,7 @@ Files may be nested only under `json/` and `attachments/`, as plain relative
 paths. Directory entries are allowed and links are not. `TS_NAME`, `CFG` and
 `USER` may be up to 64 characters, not 32. Everything is stored as it is.
 Bublik serves the pages and attachments straight from S3 and has nothing
-to generate.
+to generate or cache.
 
 ```bash
 tar -C bundle -cf bundle.tar meta_data.json bublik.json .done json attachments
@@ -158,15 +158,43 @@ Rejected uploads are also listed among the import events.
 ## Viewing logs
 
 Nothing can generate log pages next to an object in S3, so Bublik does it
-itself. It works the way a TE log server does: the first time a JSON or HTML
-page of a run is opened, Bublik generates it from the run's
-`raw_log_bundle.tpxz` and writes it back to S3. After that the page is a plain
-read. A large run can take a while the first time.
+itself, the way a TE log server does. The first time a JSON or HTML page of a
+TE run is opened, Bublik downloads the run's `raw_log_bundle.tpxz` into a local
+cache, generates the page there and serves it. Other pages of the run are then
+generated from the same downloaded bundle. A large run can take a while the
+first time.
 
-If the storage has a `public_endpoint_url`, pages that already exist are
-handed to the browser as presigned URLs on that endpoint, and Bublik serves
-none of the bytes. The bucket must then allow `GET` from Bublik's origin
-(CORS). The browser fetches these URLs without credentials.
+Opening a run's `json/` or `html/` folder in the source listing generates the
+whole folder and lists it.
+
+### What is stored where
+
+| | Where | For how long |
+|---|---|---|
+| What was uploaded: `meta_data.json` and `raw_log_bundle.tpxz`, or a bundle's `bublik.json`, `json/` and `attachments/` | S3 | Kept. Deleting the run in Bublik does not delete them. |
+| The downloaded bundle and the pages generated from it | `LOGS_S3_CACHE_DIR` on the Bublik host | Until the run goes unused for `LOGS_S3_CACHE_TTL` seconds (1 hour by default) |
+
+Generated pages are never written to S3, so the bucket holds only the
+original files. The cache cleans itself up: requests sweep it at most every
+5 minutes and delete the folders of runs nobody opened for
+`LOGS_S3_CACHE_TTL` seconds. A run that is opened again is downloaded and
+generated anew.
+
+To sweep from cron instead, or to clear the cache now:
+
+```bash
+python manage.py prune_logs_cache            # folders unused for LOGS_S3_CACHE_TTL
+python manage.py prune_logs_cache --ttl 0    # every folder not in use right now
+```
+
+Bundles with ready-made log pages (see above) never touch the cache: their
+pages and attachments are served straight from S3.
+
+If the storage has a `public_endpoint_url`, files that exist in S3 (uploaded
+pages and attachments) are handed to the browser as presigned URLs on that
+endpoint, and Bublik serves none of the bytes. The bucket must then allow
+`GET` from Bublik's origin (CORS). The browser fetches these URLs without
+credentials. Generated pages always go through Bublik.
 
 ## Deployment settings
 
@@ -175,3 +203,4 @@ none of the bytes. The bucket must then allow `GET` from Bublik's origin
 | `IMPORT_UPLOAD_MAX_SIZE` | 2 GiB | largest accepted tarball, in bytes |
 | `BUBLIK_UPLOAD_MAX_BODY` | `2g` | nginx body limit for the upload endpoint (Docker); keep it in step with the above |
 | `LOGS_S3_CACHE_DIR` | `logs-s3-cache` in the Bublik checkout (`/app/bublik/logs-s3-cache` in Docker) | where bundles are cached and pages generated; deleting it only costs regeneration |
+| `LOGS_S3_CACHE_TTL` | `3600` | seconds a run's cache folder outlives its last use |
