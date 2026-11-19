@@ -6,13 +6,29 @@ slug: release-v2.20.0
 ---
 
 We're excited to announce Bublik v2.20.0! <br />
-This release redesigns the **Runs** charts, gives the sidebar a new **project
-switcher**, and puts values and expressions into **one filter field** on Runs
-and History. Admins can now **revoke** import tasks. The backend accepts
-**access tokens**, so AI agents, CI jobs and scripts can call Bublik as a user.
-Tabs left open through an update now **move to the new version** on their own.
+This release adds an **iteration matrix** that lays a test's iterations out by
+their parameters, and lets you **classify results** from the iteration matrix,
+from **History** and from the **Multiple runs** page, across several runs at
+once. **Access tokens** let AI agents, CI jobs and scripts call Bublik as you.
+The **Runs** charts are redesigned, the sidebar gets a new **project
+switcher**, Runs and History take values and expressions in **one filter
+field**, and admins can now **revoke** import tasks. Tabs left open through an
+update now **move to the new version** on their own.
 
 ### What's New
+
+**Iteration Matrix** <br />
+Show a test's iterations as a grid of their parameters instead of a long list,
+and spot which combinations fail at a glance. Click a cell to see its
+iterations and classify them.
+
+**Classify From History and Multiple Runs** <br />
+Pick results in History, on the Multiple runs page or in the iteration matrix,
+even from several runs, and classify them under one issue in one go.
+
+**Access Tokens for Agents and Scripts** <br />
+Create a personal access token in Settings and use it in an MCP client, a CI
+job or a script. The token acts as you, with your permissions.
 
 **Redesigned Runs Charts** <br />
 Group the Runs charts by day, week or month, and click a bar to list its runs.
@@ -25,12 +41,192 @@ remembers the last project you picked.
 Filter runs and history by exact values and by expressions in the same field,
 as chips.
 
-**Revoke Import Tasks** <br />
-Stop an import that is queued or running from the Import page.
-
 <!--truncate-->
 
 ## Highlights
+
+### Iteration Matrix
+
+A test with many parameters can run hundreds of iterations. In a list, it's
+hard to tell whether the failures share a parameter value or are spread
+evenly. The iteration matrix puts parameters on the rows and on the columns,
+so a pattern stands out.
+
+#### 1. Lay Out the Matrix
+
+Open a run, expand a package and click a count of a test to list its
+iterations, as before. Then click **Matrix** in the bar above them.
+
+![Iteration matrix of a test](./img/matrix-view.webp)
+
+1. **List / Matrix.** Switches between the iteration list and the matrix. The
+   filters in the bar, such as Obtained Result, Verdicts or Parameters, apply to
+   both. The view and its layout are kept in the URL, so a link opens the same
+   matrix.
+2. **Suggested.** Ready-made layouts, worked out from the parameters of the
+   test. **Balanced** puts the two parameters with the most values on the
+   axes, **Densest** picks the pair that fills the most cells, **Expose gaps**
+   picks the pair with the most missing combinations, and **Nested rows** packs
+   a third parameter into the rows. Click one to apply it.
+3. **Parameters.** Every parameter that varies gets a role: **Rows**, **Cols**,
+   **Facet**, or **—** to leave it out. Give two parameters the same axis to
+   nest them, as `mtu` and `env` are on the rows here. Parameters with a single
+   value are listed as **FIXED**.
+4. **Cell.** **Result** colours a cell by its results: green when all its
+   iterations are expected, red when all are unexpected, and a shade of red for
+   a mix. **Coverage** colours it by how many iterations it holds.
+5. **Facets.** **Filter** shows one value of each facet parameter at a time,
+   chosen in the chips under the header. **Split** draws one matrix per value
+   instead. **Reset Layout** goes back to the default layout, and **Margins**
+   adds row and column totals.
+6. **Cells.** A cell with one iteration shows its result: **P**, **F** or
+   **S**. A cell with several shows how many it holds, and a mixed one shows
+   unexpected out of total, such as `2/4`. Hatched cells are combinations that
+   never ran, and dashed ones are hidden by the current filters.
+
+#### 2. Classify From a Cell
+
+Click a cell to open its iterations in a drawer. Each one has the same
+**Log**, **History** and **Preview** links as in the list.
+
+![A matrix cell's iterations picked for classification](./img/matrix-cell.webp)
+
+1. The cell's parameter values. The other parameters are shown on each
+   iteration.
+2. **Click an iteration** to pick it, as you pick rows in the list. Only
+   failed results and results that are already classified can be picked. The
+   picks join the same result selection, so you can pick from several cells
+   and from the list and classify them together.
+3. **Select All** picks every such iteration of the cell.
+4. **Classify** opens the classify form for everything picked so far.
+
+### Classify From History and Multiple Runs
+
+Classification used to start on the run page only, with results of one run.
+Now the same result selection works in more places, and one selection can
+hold results of several runs:
+
+- **Multiple runs.** Click results to pick them, of one of the runs or of
+  several.
+- **History.** In **List Of Results**, click a row to pick it. In **Groups Of
+  Results**, click a group to pick every result in it at once, across all the
+  runs it covers.
+- **Iteration matrix.** Pick iterations from a cell, as shown above.
+
+As on the run page, only failed results and results that are already
+classified can be picked, and a selection has to be of one project, since an
+issue belongs to one project.
+
+#### 1. Pick Results on the Multiple Runs Page
+
+Select runs in the runs list and open them together with **Multiple** in the
+sidebar. Then expand a package and click a count of a test to list its
+results.
+
+![Results of two runs picked on the Multiple runs page](./img/multiple-classify.webp)
+
+1. Each result names its **run** and links to it.
+2. **Click rows** to pick them. **Select All** in the bar above picks every
+   result listed.
+3. **Selected Results** lists what is picked, with the run of each result.
+4. **Classify** opens the classify form for all of them.
+5. The **selection pill** says how many results and runs are picked. Click it
+   to open or close the list.
+
+#### 2. Fill In the Classify Form
+
+Results of one run get the classify form they had before. When the picked
+results come from several runs, the **Match scope** section of the form lists
+the rules it is about to write, grouped by test path.
+
+![Classify form with the rules of one test path](./img/classify-form.webp)
+
+1. **A card per test path**, with the number of rules and results it covers.
+2. **Its rules.** The results of a test get one rule per group of runs with
+   the same important tags, so two runs with different tags give two rules,
+   as here. Each rule says how many of the picked results it covers.
+3. **Narrow each rule on its own.** A rule starts with the tags, parameters
+   and verdicts its results share. Remove a value to match more widely, or
+   empty a field to stop matching on it. Rules left with the same values are
+   stored as one.
+
+The whole selection is classified in one request: either every picked result
+is filed under the issue, or none is.
+
+#### 3. Pick Results in History
+
+![Picking a group of results in History](./img/history-classify.webp)
+
+1. **Click a group** of results to pick all of them. Click it again to drop
+   them. In **List Of Results**, click a row instead.
+2. **Selected Results** lists what is picked, with the run of each result.
+3. **Select All** picks every result listed on the page.
+4. **Classify** files every picked result under one issue.
+5. The **selection pill** says how many results and runs are picked.
+
+The picks are kept while you change the filters, turn the page or switch
+between List Of Results and Groups Of Results. Another test or another project
+starts with an empty selection. Once the results are classified, the selection
+is dropped and the rows show their new stamps. In List Of Results, a result
+whose classification changes how it counts now shows the **SUPPRESSED** or
+**STALE** chip, as on the run page.
+
+The runs selection and the results selection now stack in one corner of the
+page, and only one of their panels is open at a time.
+
+### Access Tokens for Agents and Scripts
+
+A personal access token lets a program call Bublik as you, with your
+permissions: an AI agent through the [MCP server](/configuration/mcp), a CI
+job or a script through the REST API.
+
+Open **Settings → Access Tokens** from the account menu at the bottom of the
+sidebar.
+
+![Creating an access token](./img/access-tokens.webp)
+
+1. Click **New token**.
+2. **Name** the token after where you will use it, such as `code-laptop` or
+   `nightly-ci`.
+3. Choose when it **Expires**: in 7, 30 or 90 days, or **Never**. A token that
+   never expires keeps working until you revoke it.
+
+After **Create token**, Bublik shows the token **once**:
+
+![A new access token with its setup snippets](./img/access-token-created.webp)
+
+1. **Copy token** copies it. Bublik stores only its hash and can't show it
+   again.
+2. **MCP client setup** shows two ready-to-copy snippets with your token
+   filled in: an MCP client configuration for Claude Code, Codex or another
+   client, and a `curl` call to the REST API. Every request carries the token
+   as `Authorization: Bearer <token>`.
+3. The **Active** list shows each token's name, the start of its value, when
+   it was created and last used, and when it expires. **Revoke** stops every
+   client that uses the token on its next request. Revoked and expired tokens
+   are listed below the active ones.
+
+Admins see the tokens of every user under **Admin → Access Tokens** and can
+revoke any of them. Token values are never shown there.
+
+![Access tokens of all users in the admin section](./img/admin-tokens.webp)
+
+1. The **owner** of the token.
+2. Its **status**: Active, Expired or Revoked.
+3. **Revoke** an active token.
+
+Good to know:
+
+- An MCP client without a token keeps working anonymously, as before. A token
+  that is wrong, expired or revoked gets a `401` with the reason instead.
+- Tokens can't create or revoke other tokens, and they don't work for user
+  administration. Both need you to be signed in.
+- You can have up to 20 active tokens and create up to 10 per hour.
+- When a user is deactivated, their tokens are revoked, and reactivating the
+  user doesn't bring them back.
+- On a server without a browser, an admin can issue a token from the command
+  line: `python manage.py issue_user_token <email> --name <name> --expires 30`.
+  `--expires` takes `7`, `30`, `90` or `never`.
 
 ### Redesigned Runs Charts
 
@@ -169,35 +365,6 @@ Runs that are already imported pick up the new category when the config is
 saved. Run comparison shows the same links, and a new bug report lists such
 values as `name: url`.
 
-### Access Tokens for Agents and Scripts
-
-The backend now accepts **personal access tokens**. A token lets a program
-call Bublik as a user, with that user's permissions: an AI agent through the
-[MCP server](/configuration/mcp), a CI job or a script through the REST API.
-Every request carries the token as `Authorization: Bearer <token>`.
-
-The UI has no page for tokens yet. For now, a token is created in one of two
-ways:
-
-- An admin issues it on the server, from the command line:
-  `python manage.py issue_user_token <email> --name <name> --expires 30`.
-  `--expires` takes `7`, `30`, `90` or `never`.
-- A signed-in user calls `/api/v2/auth/tokens/`, which lists, creates and
-  revokes their tokens.
-
-Either way the token is shown **once**: Bublik stores only its hash and can't
-show it again.
-
-Good to know:
-
-- An MCP client without a token keeps working anonymously, as before. A token
-  that is wrong, expired or revoked gets a `401` with the reason instead.
-- Tokens can't create or revoke other tokens, and they don't work for user
-  administration. Both need you to be signed in.
-- A user can have up to 20 active tokens and create up to 10 per hour.
-- When a user is deactivated, their tokens are revoked, and reactivating the
-  user doesn't bring them back.
-
 ### Open Tabs Move to the New Version
 
 A tab left open while Bublik was updated kept running the previous version of
@@ -231,15 +398,23 @@ which covered only a few pages. The Page Help card in **Help → FAQ** and the
   account menu has a Layout entry too. The choice is saved in your browser.
 
   ![Layout setting](./img/page-layout.webp)
+- **Log layouts.** **Settings → Preferences** now has three choices for the
+  layout that log links in Bublik open in. Each is one of **Tree + info +
+  log**, **Tree + log**, **Info + log** or **Log only**:
 
-- **Default log layout.** **Settings → Preferences → Default log layout**
-  chooses the layout that log links in Bublik open in: **Tree + info + log**,
-  **Tree + log**, **Info + log** or **Log only**. This includes the Log links
-  in the runs table and in History, which used to have their own fixed
-  layout. A link that names a layout, such as one shared with you, opens as it
-  was sent. The Preferences options are now shown as cards and switches.
+  ![Log layout settings](./img/log-layout.webp)
 
-  ![Default log layout setting](./img/log-layout.webp)
+  1. **Default log layout** is for the log links that are neither in the runs
+     table nor in History. It starts at Tree + info + log.
+  2. **Log layout from Runs** is for the Log link of a run in the runs table.
+     It starts at Tree + log.
+  3. **Log layout from History** is for the Log links of History, including
+     the results listed in Groups Of Results. It starts at Info + log.
+
+  The links of Runs and History start at the layouts they always had, so they
+  open as before until you change them. A link that names a layout, such as
+  one shared with you, opens as it was sent. The Preferences options are now
+  shown as cards and switches.
 
 - **Run page.** The run header no longer has **Issues**, **Log**, **Reports**
   and **Source**, and the log toolbar no longer has **Run**, **Reports** and
@@ -267,9 +442,18 @@ which covered only a few pages. The Page Help card in **Help → FAQ** and the
   says so instead of opening a chat whose requests all fail.
 - **History.** Responses are cached per endpoint and query, so a request can no
   longer be answered from the cache of a different one.
+- **Permissions.** If the global settings allowed reading configs without
+  signing in, the configs of every project were readable, even of projects
+  whose own settings didn't allow it. Each project's own setting now applies.
+- **Admin → Users.** The users table looks like the Issues and Rules tables,
+  with icon actions in its last column.
 - **API.**
   - `POST /api/v2/importruns/revoke/` revokes an import task.
   - `/api/v2/auth/tokens/` lists, creates and revokes access tokens.
+  - `GET /api/v2/auth/capabilities/` lists the actions the current user may
+    perform, overall and per project.
+  - `classify/options` and `classify` accept results of several runs of one
+    project.
   - The import endpoints are described in the OpenAPI schema, and the schemas
     of the log and server endpoints match their actual responses.
   - The log endpoints answer an invalid `page` parameter with `400` instead of
@@ -348,27 +532,55 @@ task pull
 task up
 ```
 
+The nginx image of this release sends only the hashed files of the UI build
+with a year-long cache lifetime. Fonts and the favicon are cached for a day,
+and everything else, including `index.html`, is checked for changes on every
+request. Nothing has to be configured by hand.
+
 ## Changelog
 
 ### Frontend
 
 #### 🚀 New Feature
 
+* **admin:** draw the users table like the issues table ([9f07fbb](https://github.com/ts-factory/bublik-ui/commit/9f07fbb9a5f7d4910d0be1c2928940512fb841db))
+* **admin:** list and revoke every user's access token ([f79c406](https://github.com/ts-factory/bublik-ui/commit/f79c4069cc6bdcc5d632e163bd913c5b38bbbb28))
+* **api:** add the access token endpoints ([78f389f](https://github.com/ts-factory/bublik-ui/commit/78f389fbd1422901422625449221cda0a57f926d))
 * **app:** open the next page in a newly deployed build ([78c2cef](https://github.com/ts-factory/bublik-ui/commit/78c2cef9fa726871299cd8de5ce270f0a6ce11e1))
 * **app:** reload when a chunk is gone after a new build ([02785e6](https://github.com/ts-factory/bublik-ui/commit/02785e6a19522decd015f82f46184d7ce97ae309))
 * **build:** emit version.json with a build id ([e16478c](https://github.com/ts-factory/bublik-ui/commit/e16478c1b5d7dd8ad6afac6b2a7204414fa71946))
+* **classification:** classify a selection that spans runs ([c590087](https://github.com/ts-factory/bublik-ui/commit/c590087b145ba0b680b99e2de2a6268a2f49eb84))
+* **classification:** edit each rule of the classify form on its own ([700d719](https://github.com/ts-factory/bublik-ui/commit/700d719f50e70b87f5ddf216b9b4f86e90eedecd))
+* **classification:** give each rule the form's own inputs ([68d9ef9](https://github.com/ts-factory/bublik-ui/commit/68d9ef9cfc7fd79a103e0d0cc6397469ac9950a7))
+* **classification:** group the classify form's rules by test path ([4e36dea](https://github.com/ts-factory/bublik-ui/commit/4e36dea1557f7c29b2eae15c49e050dc5a655458))
+* **classification:** keep only the runs' shared tags in one step ([9db074b](https://github.com/ts-factory/bublik-ui/commit/9db074b565fe7f0211451499b28cc3b523f62f37))
+* **classification:** keep the classify form of one run's results as it was ([f0122c3](https://github.com/ts-factory/bublik-ui/commit/f0122c30d722bb8e89a9b23489ba3dad9313568e))
 * **classification:** leave issue page navigation to the sidebar ([42976bf](https://github.com/ts-factory/bublik-ui/commit/42976bfec57119b1031db91eb96f586f524e3a87))
+* **classification:** offer Select All in the selection popover ([4605f02](https://github.com/ts-factory/bublik-ui/commit/4605f0227d151faae779c15dac6bfff38ffd42e0))
+* **classification:** show the verdict chip without a Classify button ([5ae01d5](https://github.com/ts-factory/bublik-ui/commit/5ae01d56928984f0a602f19307adcd34ea92a276))
+* **classification:** write rules as specific as the classified results ([efa4085](https://github.com/ts-factory/bublik-ui/commit/efa4085160d78f54148bc0c7aa1a6d296c1b3c4a))
+* **history:** pick linear rows to classify them ([79eb793](https://github.com/ts-factory/bublik-ui/commit/79eb79361963eff51da2bac14f04c850f5ce7c38))
+* **history:** pick verdict groups to classify them ([0253c82](https://github.com/ts-factory/bublik-ui/commit/0253c820d9589e750c07385365c47f9a5bed2f5c))
+* **history:** select all listed linear rows from the popover ([c3832a9](https://github.com/ts-factory/bublik-ui/commit/c3832a9e9677acbf4e13494313d041fd11a56c8b))
+* **history:** show the classification chip on linear rows ([b297e78](https://github.com/ts-factory/bublik-ui/commit/b297e78a7baefe3fc401c1826367a0aef5b52284))
 * **history:** take values and expressions in one field per filter ([76bb630](https://github.com/ts-factory/bublik-ui/commit/76bb6308836c44f8822f7422e58bdff04ef84578))
 * **import:** revoke unfinished import tasks ([45b0b5e](https://github.com/ts-factory/bublik-ui/commit/45b0b5eaf2e31b792a9aba06c99755f749587840))
 * **import:** show revoked import tasks ([117e467](https://github.com/ts-factory/bublik-ui/commit/117e46772f837f209716089c2076fd7a65a19298))
 * **layout:** let the page width be capped in a left or centered layout ([294d3e8](https://github.com/ts-factory/bublik-ui/commit/294d3e888df9f430e0e871d211c8e15eb1fe2998))
 * **log:** add a default log layout preference for in-app log links ([ad26084](https://github.com/ts-factory/bublik-ui/commit/ad260843d97d52301c1f1ebc925959c777f64bdf))
+* **log:** give Runs and History their own default log layouts ([d510516](https://github.com/ts-factory/bublik-ui/commit/d510516124e24ca0d4777bb5424333788e850ff4))
 * **projects:** add New Project and Manage to the switcher ([ebd0e34](https://github.com/ts-factory/bublik-ui/commit/ebd0e34f089c3fd68644a8eb84f13b284e932ac8))
 * **projects:** switch projects from a searchable popover ([3cf90b3](https://github.com/ts-factory/bublik-ui/commit/3cf90b3c25da5adc0a3f159ce43ad1afa991ac1b))
+* **run:** add iteration matrix analysis module ([22eaeaf](https://github.com/ts-factory/bublik-ui/commit/22eaeafca65bb18a510f4ef59a04a3d4b787a3d8))
+* **run:** add iteration matrix view component ([ac50e9a](https://github.com/ts-factory/bublik-ui/commit/ac50e9ae392e865a83f30ac8b96d750f79cc2928))
+* **run:** add List/Matrix view toggle to the iteration table ([754972e](https://github.com/ts-factory/bublik-ui/commit/754972e5af2f81f185756f795d763f80e3bd9c83))
+* **run:** build out the iteration matrix view ([76482c9](https://github.com/ts-factory/bublik-ui/commit/76482c95647ac43b7f94d5e11ec8b7a0452f301d))
+* **run:** classify matrix cell iterations through the result selection ([fb33948](https://github.com/ts-factory/bublik-ui/commit/fb339480010bc8b840357b64d8253d8ac0a413e0))
 * **run:** link special category values to their URLs ([52532c9](https://github.com/ts-factory/bublik-ui/commit/52532c9b77969b32959657c34132d9fb8ce42c20))
 * **run:** move the run header's links to the sidebar ([54fb005](https://github.com/ts-factory/bublik-ui/commit/54fb005935d04e35d7181e7a21cc6a63e9ecd43d))
 * **run:** right-align numbers in the run table ([93c240d](https://github.com/ts-factory/bublik-ui/commit/93c240d3400a966e49a33bd47b04fb8f5639669f))
 * **runs:** break the run conclusions down in the overview ([7b8e9de](https://github.com/ts-factory/bublik-ui/commit/7b8e9de692ddb37a51ed07df0807423c526ee4e5))
+* **run:** select results on the multiple runs page ([dd3c699](https://github.com/ts-factory/bublik-ui/commit/dd3c699a615b1a428ad73b7179e10f1a8b101c38))
 * **runs:** fill the page height with the runs charts ([e25ca2f](https://github.com/ts-factory/bublik-ui/commit/e25ca2f1455dd979c4e0988ba41349463f03da22))
 * **runs:** filter runs by metas and expressions in one input ([112f6b4](https://github.com/ts-factory/bublik-ui/commit/112f6b42b230dbdf23d085965e7f5c45785e83a0))
 * **runs:** group the runs charts by day, week or month ([9e4fe14](https://github.com/ts-factory/bublik-ui/commit/9e4fe14c335e8fb5d60247325f11d26c7491a137))
@@ -380,7 +592,11 @@ task up
 * **settings:** show that the account row opens a menu ([3bd2b47](https://github.com/ts-factory/bublik-ui/commit/3bd2b479fb83800d4327ac0ea8f553d766bf3332))
 * **sidebar:** keep the project picker under the logo ([0b53868](https://github.com/ts-factory/bublik-ui/commit/0b53868c6042385508f0ec87062a6648a0f48f17))
 * **sidebar:** open the docs from the help buttons ([0923c40](https://github.com/ts-factory/bublik-ui/commit/0923c40e73544eed49285a4b84a52e1ec5e1cf36))
+* **tokens:** manage access tokens from settings ([777e266](https://github.com/ts-factory/bublik-ui/commit/777e26684e3e2ab7b84609195c008fdd84b0450f))
+* **ui:** add a highlighted code block with a copy button ([64cd84c](https://github.com/ts-factory/bublik-ui/commit/64cd84cf4c9097b2e36b3b9537763efa522a477e))
 * **ui:** add a meta filter input for value and expression chips ([68c30c7](https://github.com/ts-factory/bublik-ui/commit/68c30c7e5afb836f03a16923b15f94fdb493a4e7))
+* **ui:** add SegmentedTabs ([fe5963f](https://github.com/ts-factory/bublik-ui/commit/fe5963fd732a78b572e65941da82c481c507f2b9))
+* **ui:** keep faceted filters to one row in a narrow toolbar ([730b3c1](https://github.com/ts-factory/bublik-ui/commit/730b3c1fd07698663018ee63b476cbda27bb91cc))
 
 #### 💅 Polish
 
@@ -405,9 +621,12 @@ task up
 * **runs:** fetch the runs once when the filters change ([9521b31](https://github.com/ts-factory/bublik-ui/commit/9521b3177d8e6c7b54c54e65f80f071568134c35))
 * **runs:** keep Submit the same size when it turns primary ([21efeac](https://github.com/ts-factory/bublik-ui/commit/21efeac3fe0a19ee3e7d579536d1872d50e8c5d2))
 * **runs:** read the runs filters from the current URL only ([f8c28c4](https://github.com/ts-factory/bublik-ui/commit/f8c28c485f8cd499a441d570f78e1e10e61e6cb6))
+* **selection:** stack the runs and results selections in one dock ([b58d821](https://github.com/ts-factory/bublik-ui/commit/b58d8211bc70469b373af98bade3ac1abba62a20))
+* **ui:** round the secondary split button ([d31f731](https://github.com/ts-factory/bublik-ui/commit/d31f7310d242e9e3c704df1dad7d9ba6d8d8f4dd))
 
 #### ♻ Code Refactoring
 
+* **classification:** offer the selection's Classify outside its popover ([4f752ae](https://github.com/ts-factory/bublik-ui/commit/4f752ae1be980f0dd3898ab7d622dac51f711896))
 * **docs:** build docs links in one place ([8c78057](https://github.com/ts-factory/bublik-ui/commit/8c78057479975f61bff897ecceba1efbca95d169))
 
 #### 👷‍ Build System
@@ -420,15 +639,25 @@ task up
 
 #### ✅ Tests
 
+* **e2e:** budget the import origin scenario by its tooltips ([9c615a8](https://github.com/ts-factory/bublik-ui/commit/9c615a8aa13d3e0662e11639bd427fb91276f7a9))
 * **e2e:** check Copy Log copies every column of the import log ([64d9d90](https://github.com/ts-factory/bublik-ui/commit/64d9d9005cab61b1de7aaf0ff83281827ca3231f))
 * **e2e:** check that editing a rule again shows its saved values ([d62d6e9](https://github.com/ts-factory/bublik-ui/commit/d62d6e92d373cc70f48495a90da27affac4861e2))
+* **e2e:** check the log layouts of the Runs and History log links ([61a0a43](https://github.com/ts-factory/bublik-ui/commit/61a0a434bdedb21ca2348dfc7e4261d6075d9b97))
 * **e2e:** check the page layout setting ([082d0a0](https://github.com/ts-factory/bublik-ui/commit/082d0a0809a9ab1cf69cfe2208eacd895cca7ab8))
+* **e2e:** classify history rows picked across runs ([2e4fa26](https://github.com/ts-factory/bublik-ui/commit/2e4fa268d35324fc209783939947dd8bb49d468e))
 * **e2e:** close the account menu past a tray tooltip ([3652a4a](https://github.com/ts-factory/bublik-ui/commit/3652a4a2503c004857d8f3727872343fd81208a0))
+* **e2e:** count the classify form's rules, not its path cards ([4f3212c](https://github.com/ts-factory/bublik-ui/commit/4f3212c9b502f95a81a031fecd5b1f1c7d3c3234))
+* **e2e:** cover access token management ([2729642](https://github.com/ts-factory/bublik-ui/commit/2729642168d3035679cce76b459560af94d1b888))
 * **e2e:** cover the combined metas input on runs and history ([3634a12](https://github.com/ts-factory/bublik-ui/commit/3634a12a0d6439c8be839d7321091b1f5c7c9c26))
 * **e2e:** cover the project switcher popover ([9f62c61](https://github.com/ts-factory/bublik-ui/commit/9f62c610cb608a944bb5f731cf5f1d4e863b8cc6))
 * **e2e:** cover the runs charts period and drawers ([c2904c8](https://github.com/ts-factory/bublik-ui/commit/c2904c814bcdea2f9fd1b83b798dda0e876f2736))
+* **e2e:** expect a rule for each result picked across runs ([c9a114b](https://github.com/ts-factory/bublik-ui/commit/c9a114bdc33e722802b4517fd2ac0b4df770e96f))
 * **e2e:** open a stamp's tooltip by focusing its key ([ef07695](https://github.com/ts-factory/bublik-ui/commit/ef0769523e07ef9b3d26d54858d763d7096c3eb6))
+* **e2e:** pick listed rows and verdict groups in history ([c5e2ea6](https://github.com/ts-factory/bublik-ui/commit/c5e2ea60a17cd74957c490b727c228b39e9c91fd))
+* **e2e:** read a narrow toolbar's facet picks from its list ([d82da59](https://github.com/ts-factory/bublik-ui/commit/d82da59bbf450dee1f6b3ec4ff5acdbe3c6f53c8))
 * **e2e:** stop the CI suite after 20 failed tests ([309b82e](https://github.com/ts-factory/bublik-ui/commit/309b82e583743fa0e5ded44f08015f2aa88abdf4))
+* **e2e:** wait for the run tree before expanding a package path ([8a975cd](https://github.com/ts-factory/bublik-ui/commit/8a975cdf81ae89d6183cbf94ab060e45818bc40e))
+* **run:** classify on the multiple runs page ([cbee8d2](https://github.com/ts-factory/bublik-ui/commit/cbee8d2ed1b840fa5c185f38683882a43f6cadb9))
 
 ---
 
@@ -440,6 +669,8 @@ task up
 - **auth:** accept personal access tokens ([9179059](https://github.com/ts-factory/bublik/commit/9179059ddaf2c781bbe94a9ce6c1708580370c5c)), related to [#357](https://github.com/ts-factory/bublik/issues/357)
 - **auth:** add token management API ([22ee780](https://github.com/ts-factory/bublik/commit/22ee780675c74ffb81aaf901a19fbc662d7980ec)), related to [#357](https://github.com/ts-factory/bublik/issues/357)
 - **mcp:** authenticate callers ([8d6ac25](https://github.com/ts-factory/bublik/commit/8d6ac253125bc32a6bfebd864198b89c9bcbea76)), closes [#357](https://github.com/ts-factory/bublik/issues/357)
+- **auth:** add endpoint to list the actions available to the user ([4904a6d](https://github.com/ts-factory/bublik/commit/4904a6d137adbd9d3557d0d276c179ac5ffddee3))
+- **result:** make it possible to classify results of several runs ([e394aef](https://github.com/ts-factory/bublik/commit/e394aefd8c9da8ac166729305274efe7d3644816))
 - **mcp:** add documentation search and read tools ([ce59c24](https://github.com/ts-factory/bublik/commit/ce59c24e0c941f4b114c2e52e6a43ca5481633ed))
 - **dashboard:** make it possible to link cells to URLs from their values ([f0dec5f](https://github.com/ts-factory/bublik/commit/f0dec5f4f918dc04ae1d0efa725213f3f1ed9bd6))
 - **run:** make it possible to follow links from special categories ([173a2ac](https://github.com/ts-factory/bublik/commit/173a2ac5d0c47629df4bd640174ea1909c8a4b41))
@@ -471,6 +702,7 @@ task up
 - **importruns:** fix run losing logs link on failed force import ([cc22999](https://github.com/ts-factory/bublik/commit/cc22999f0144119a065a66b27956008242fcff16))
 - **mcp:** keep the response cache in memory ([5830576](https://github.com/ts-factory/bublik/commit/58305766a5833611eb7071bfa4d5dbcb31fb9bbf)), related to [#357](https://github.com/ts-factory/bublik/issues/357)
 - **history:** isolate cached responses by endpoint and query parameters ([9a359e7](https://github.com/ts-factory/bublik/commit/9a359e7b253ab3386eb428ffee3208901e88010f))
+- **config:** fix project settings being ignored when reading configs ([38fe687](https://github.com/ts-factory/bublik/commit/38fe6873d8257984637948c2be85d55b8b3d5d36))
 - **log:** return clear errors for invalid page parameters ([980e0da](https://github.com/ts-factory/bublik/commit/980e0dada80b28753f005b369d54299cd9bbc4d3))
 - **index:** do not let the UI index be cached ([ec310a6](https://github.com/ts-factory/bublik/commit/ec310a6ced1558443ca69bfc94e11f9baa48cd94))
 - **deploy:** fix the Celery worker staying down after it fails ([a0d4594](https://github.com/ts-factory/bublik/commit/a0d459441f8e2cea8a5ee3d78055602afd4110cf))
@@ -479,6 +711,7 @@ task up
 #### ♻️ Code Refactoring
 
 - **auth:** read the JWT settings through Django's settings object ([135bb31](https://github.com/ts-factory/bublik/commit/135bb3161bf77bd5ea220348d647f425a052c0c7)), related to [#357](https://github.com/ts-factory/bublik/issues/357)
+- **auth:** make permission settings readable outside the check ([4c9c2d8](https://github.com/ts-factory/bublik/commit/4c9c2d88de771d843f09712cc7a89be7e61cb1bc))
 - **log:** prepare API module for independent evolution ([d348916](https://github.com/ts-factory/bublik/commit/d348916c03f46b29d6187d5d1bd5ff33a85e1327))
 - **log:** introduce DTO-based service contracts ([8892c1d](https://github.com/ts-factory/bublik/commit/8892c1de895addb85dc421ac6ed58db7377437a6))
 - **server:** prepare API module for independent evolution ([c2c8c46](https://github.com/ts-factory/bublik/commit/c2c8c461f97a5c0bd37535db3023a195d73d782e))
